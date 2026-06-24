@@ -16,6 +16,10 @@ public class LiveKitManager : MonoBehaviour
 
     public Room Room { get; private set; }
     public bool IsConnected => Room?.IsConnected ?? false;
+    public bool IsConnecting { get; private set; }
+
+    public string ServerUrl { get => serverUrl; set => serverUrl = value; }
+    public string Token { get => token; set => token = value; }
 
     // Keyed by participant identity
     private readonly Dictionary<string, RemoteTrackPublication> _videoTracks = new();
@@ -23,6 +27,7 @@ public class LiveKitManager : MonoBehaviour
 
     public event Action<Room> OnConnected;
     public event Action OnDisconnected;
+    public event Action<string> OnConnectionError;
     public event Action<string> OnVideoTrackAvailable;
     public event Action<string> OnVideoTrackRemoved;
     public event Action<IRemoteTrack, RemoteTrackPublication, RemoteParticipant> OnTrackSubscribed;
@@ -45,6 +50,17 @@ public class LiveKitManager : MonoBehaviour
             StartCoroutine(Connect());
     }
 
+    /// <summary>
+    /// Set connection details at runtime (e.g. from the connection screen) and connect.
+    /// </summary>
+    public void ConnectWith(string url, string accessToken)
+    {
+        serverUrl = url;
+        token = accessToken;
+        if (IsConnected || IsConnecting) return;
+        StartCoroutine(Connect());
+    }
+
     void OnDestroy()
     {
         Room?.Disconnect();
@@ -52,6 +68,9 @@ public class LiveKitManager : MonoBehaviour
 
     public IEnumerator Connect()
     {
+        if (IsConnected || IsConnecting) yield break;
+        IsConnecting = true;
+
         Room = new Room();
         Room.TrackPublished += HandleTrackPublished;
         Room.TrackUnpublished += HandleTrackUnpublished;
@@ -65,10 +84,13 @@ public class LiveKitManager : MonoBehaviour
 
         if (connect.IsError)
         {
+            IsConnecting = false;
             Debug.LogError("[LiveKit] Failed to connect to server");
+            OnConnectionError?.Invoke("Unable to connect. Check the server URL and token.");
             yield break;
         }
 
+        IsConnecting = false;
         Debug.Log($"[LiveKit] Connected to room: {Room.Name}");
 
         foreach (var kv in Room.RemoteParticipants)

@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__unity-mcp__Unity_RunCommand",
+      "mcp__unity-mcp__Unity_GetConsoleLogs",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Workspace\\\\HCMUS\\\\Master\\\\Repo\\\\Master Thesis Client\" -Recurse -Force | Select-Object -Property FullName | ForEach-Object { $_.FullName } | Sort-Object)",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Workspace\\\\HCMUS\\\\Master\\\\Repo\\\\Master Thesis Client\" | Where-Object { -not $_.Name.StartsWith\\('.'\\) -and $_.Name -ne 'Library' } | Select-Object Name, @{N='Type';E={if\\($_.PSIsContainer\\){'Dir'}else{'File'}}})",
+      "Bash(dir \"C:\\\\Workspace\\\\HCMUS\\\\Master\\\\Repo\" /B)"
+    ]
+  }
+}
