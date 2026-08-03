@@ -1,11 +1,26 @@
+using System;
 using Thesis.Patterns;
-using Thesis.UI.Screens;
 using UnityEngine;
 
 namespace Thesis.Managers
 {
-    public class ClientManager : Singleton<ClientManager>
+    public enum ClientState
     {
+        Init,
+        Idle,
+        Streaming,
+        Error
+    }
+
+    public partial class ClientManager : Singleton<ClientManager>
+    {
+        private StateMachine<ClientManager> _stateMachine;
+
+        public ClientState CurrentState { get; private set; } = ClientState.Init;
+        public string ErrorMessage { get; private set; }
+
+        public event Action<ClientState> OnStateChanged;
+
         protected override void Awake()
         {
             base.Awake();
@@ -13,21 +28,15 @@ namespace Thesis.Managers
 
         void Start()
         {
-            if (LiveKitManager.HasInstance)
-                LiveKitManager.Instance.OnDisconnected += OnDisconnected;
-
-            UIManager.Instance.ShowScreen<ConnectionScreen>(forceShow: true);
+            _stateMachine = new StateMachine<ClientManager>();
+            _stateMachine.Initialize(new InitState(this));
         }
 
-        void OnDestroy()
+        internal void ChangeState(State<ClientManager> newState, ClientState stateEnum)
         {
-            if (LiveKitManager.HasInstance)
-                LiveKitManager.Instance.OnDisconnected -= OnDisconnected;
-        }
-
-        private void OnDisconnected()
-        {
-            UIManager.Instance.ShowScreen<ConnectionScreen>("Disconnected. Enter server URL to reconnect.", forceShow: true);
+            CurrentState = stateEnum;
+            _stateMachine.ChangeState(newState);
+            OnStateChanged?.Invoke(stateEnum);
         }
     }
 }
