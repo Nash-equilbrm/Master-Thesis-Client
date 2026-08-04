@@ -81,12 +81,18 @@ namespace Thesis.UI.Screens
                 return;
             }
 
-            var url = _serverUrlField != null ? _serverUrlField.text.Trim() : "";
-            if (string.IsNullOrEmpty(url))
+            var raw = _serverUrlField != null ? _serverUrlField.text.Trim() : "";
+            if (string.IsNullOrEmpty(raw))
             {
                 SetStatus("Server URL is required.", isError: true);
                 return;
             }
+
+            var url = raw;
+            if (!url.StartsWith("http://") && !url.StartsWith("https://"))
+                url = "http://" + url;
+            if (!System.Text.RegularExpressions.Regex.IsMatch(url, @":\d+$"))
+                url = url.TrimEnd('/') + ":3000";
 
             SetBusy(true);
             SetStatus("Fetching token…");
