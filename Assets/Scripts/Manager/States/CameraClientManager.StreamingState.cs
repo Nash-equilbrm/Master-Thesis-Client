@@ -1,4 +1,5 @@
 using Thesis.Patterns;
+using Thesis.UI.Screens;
 
 namespace Thesis.Managers
 {
@@ -12,6 +13,9 @@ namespace Thesis.Managers
             {
                 if (LiveKitCameraPublisher.HasInstance)
                     LiveKitCameraPublisher.Instance.OnDisconnected += OnDisconnected;
+
+                if (UIManager.HasInstance)
+                    UIManager.Instance.ShowScreen<ConnectionStatusScreen>(forceShow: true);
             }
 
             public override void Exit()

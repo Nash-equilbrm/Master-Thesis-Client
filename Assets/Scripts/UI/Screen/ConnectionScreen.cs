@@ -56,6 +56,18 @@ namespace Thesis.UI.Screens
                 LiveKitManager.Instance.OnConnectionError += HandleConnectionError;
             }
 
+            if (RegistrationClient.HasInstance)
+            {
+                RegistrationClient.Instance.OnRegistered         += HandleRegistered;
+                RegistrationClient.Instance.OnRegistrationFailed += HandleRegistrationFailed;
+            }
+
+            if (LiveKitCameraPublisher.HasInstance)
+            {
+                LiveKitCameraPublisher.Instance.OnPublishingStarted += HandlePublishingStarted;
+                LiveKitCameraPublisher.Instance.OnConnectionFailed  += HandleCameraConnectionFailed;
+            }
+
             SetStatus(data is string msg ? msg : "Enter the server URL and press Connect.");
         }
 
@@ -71,6 +83,18 @@ namespace Thesis.UI.Screens
             {
                 LiveKitManager.Instance.OnConnected       -= HandleConnected;
                 LiveKitManager.Instance.OnConnectionError -= HandleConnectionError;
+            }
+
+            if (RegistrationClient.HasInstance)
+            {
+                RegistrationClient.Instance.OnRegistered         -= HandleRegistered;
+                RegistrationClient.Instance.OnRegistrationFailed -= HandleRegistrationFailed;
+            }
+
+            if (LiveKitCameraPublisher.HasInstance)
+            {
+                LiveKitCameraPublisher.Instance.OnPublishingStarted -= HandlePublishingStarted;
+                LiveKitCameraPublisher.Instance.OnConnectionFailed  -= HandleCameraConnectionFailed;
             }
 
             base.Hide();
@@ -98,6 +122,8 @@ namespace Thesis.UI.Screens
                     SetStatus("No RegistrationClient in scene.", isError: true);
                     return;
                 }
+                SetBusy(true);
+                SetStatus("Registering…");
                 RegistrationClient.Instance.ServerUrl = url;
                 CameraClientManager.Instance.StartRegistering();
                 return;
@@ -143,6 +169,29 @@ namespace Thesis.UI.Screens
         }
 
         private void HandleConnectionError(string error)
+        {
+            SetBusy(false);
+            SetStatus($"Connection failed: {error}", isError: true);
+        }
+
+        private void HandleRegistered()
+        {
+            SetStatus("Connecting…");
+        }
+
+        private void HandleRegistrationFailed(string error)
+        {
+            SetBusy(false);
+            SetStatus($"Registration failed: {error}", isError: true);
+        }
+
+        private void HandlePublishingStarted()
+        {
+            SetStatus("Connected.");
+            Hide();
+        }
+
+        private void HandleCameraConnectionFailed(string error)
         {
             SetBusy(false);
             SetStatus($"Connection failed: {error}", isError: true);

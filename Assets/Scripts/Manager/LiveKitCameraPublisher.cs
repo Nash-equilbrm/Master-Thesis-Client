@@ -25,6 +25,7 @@ namespace Thesis.Managers
 
         public bool IsConnected => _room?.IsConnected ?? false;
         public bool IsPublishing { get; private set; }
+        public WebCamTexture Texture => _webCamTexture;
 
         public event Action OnConnected;
         public event Action OnDisconnected;

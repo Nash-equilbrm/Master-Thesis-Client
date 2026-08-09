@@ -2,11 +2,15 @@ using Thesis.Managers;
 using Thesis.UI;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace Thesis.UI.Screens
 {
     public class ConnectionStatusScreen : BaseScreen
     {
+        [Header("References")]
+        [SerializeField] private RawImage _cameraPreview;
+        [SerializeField] private AspectRatioFitter _aspectFitter;
         [SerializeField] private TMP_Text _statusText;
 
         public override void Init() => base.Init();
@@ -14,38 +18,37 @@ namespace Thesis.UI.Screens
         public override void Show(object data = null)
         {
             base.Show(data);
-            if (CameraClientManager.HasInstance)
-            {
-                CameraClientManager.Instance.OnStateChanged += OnStateChanged;
-                OnStateChanged(CameraClientManager.Instance.CurrentState);
-            }
+
+            if (_statusText != null && RegistrationClient.HasInstance)
+                _statusText.text = $"Streaming as {RegistrationClient.Instance.Identity}";
+
+            if (LiveKitCameraPublisher.HasInstance)
+                ApplyPreviewTexture(LiveKitCameraPublisher.Instance.Texture);
         }
 
         public override void Hide()
         {
-            if (CameraClientManager.HasInstance)
-                CameraClientManager.Instance.OnStateChanged -= OnStateChanged;
+            if (_cameraPreview != null) _cameraPreview.texture = null;
             base.Hide();
         }
 
-        private void OnStateChanged(CameraState state)
+        private void ApplyPreviewTexture(WebCamTexture texture)
         {
-            var message = state switch
-            {
-                CameraState.Idle        => "Idle",
-                CameraState.Registering => "Registering...",
-                CameraState.Connecting  => "Connecting...",
-                CameraState.Streaming   => "Streaming",
-                CameraState.Error       => $"Error: {CameraClientManager.Instance.ErrorMessage}",
-                _                       => state.ToString()
-            };
-            SetStatus(message);
-        }
+            if (_cameraPreview == null || texture == null) return;
 
-        private void SetStatus(string message)
-        {
-            if (_statusText != null) _statusText.text = message;
-            Debug.Log($"[ConnectionStatusScreen] {message}");
+            _cameraPreview.texture = texture;
+
+            var rt = _cameraPreview.rectTransform;
+            rt.localEulerAngles = new Vector3(0f, 0f, -texture.videoRotationAngle);
+            rt.localScale = new Vector3(rt.localScale.x, texture.videoVerticallyMirrored ? -1f : 1f, 1f);
+
+            if (_aspectFitter != null && texture.height > 0)
+            {
+                bool rotated = texture.videoRotationAngle == 90 || texture.videoRotationAngle == 270;
+                float width  = rotated ? texture.height : texture.width;
+                float height = rotated ? texture.width  : texture.height;
+                _aspectFitter.aspectRatio = width / height;
+            }
         }
     }
 }

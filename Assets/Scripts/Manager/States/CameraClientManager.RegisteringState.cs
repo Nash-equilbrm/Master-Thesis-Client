@@ -11,8 +11,8 @@ namespace Thesis.Managers
 
             public override void Enter()
             {
-                if (UIManager.HasInstance)
-                    UIManager.Instance.ShowScreen<ConnectionStatusScreen>(forceShow: true);
+                if (UIManager.HasInstance && !(UIManager.Instance.CurScreen is ConnectionScreen))
+                    UIManager.Instance.ShowScreen<ConnectionScreen>("Registering…", forceShow: true);
 
                 _context.CurrentState = CameraState.Registering;
                 _context.OnStateChanged?.Invoke(CameraState.Registering);
