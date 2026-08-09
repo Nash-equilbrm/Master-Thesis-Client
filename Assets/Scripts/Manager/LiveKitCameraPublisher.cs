@@ -27,6 +27,9 @@ namespace Thesis.Managers
         public bool IsPublishing { get; private set; }
         public WebCamTexture Texture => _webCamTexture;
 
+        /// <summary>Display label shown to viewers, sent as the LiveKit participant name on connect.</summary>
+        public string Label { get; set; }
+
         public event Action OnConnected;
         public event Action OnDisconnected;
         public event Action OnPublishingStarted;
@@ -131,6 +134,9 @@ namespace Thesis.Managers
                 _room = null;
                 yield break;
             }
+
+            if (!string.IsNullOrEmpty(Label))
+                yield return _room.LocalParticipant.SetName(Label);
 
             Debug.Log($"[LiveKitCameraPublisher] Connected as {reg.Identity}");
             OnConnected?.Invoke();

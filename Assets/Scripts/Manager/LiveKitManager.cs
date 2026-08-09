@@ -30,6 +30,7 @@ namespace Thesis.Managers
         public event Action<string> OnConnectionError;
         public event Action<string> OnVideoTrackAvailable;
         public event Action<string> OnVideoTrackRemoved;
+        public event Action<string> OnParticipantNameChanged;
         public event Action<IRemoteTrack, RemoteTrackPublication, RemoteParticipant> OnTrackSubscribed;
         public event Action<IRemoteTrack, RemoteTrackPublication, RemoteParticipant> OnTrackUnsubscribed;
 
@@ -67,6 +68,7 @@ namespace Thesis.Managers
             Room.TrackUnpublished += HandleTrackUnpublished;
             Room.TrackSubscribed += HandleTrackSubscribed;
             Room.TrackUnsubscribed += HandleTrackUnsubscribed;
+            Room.ParticipantNameChanged += HandleParticipantNameChanged;
             Room.Disconnected += HandleDisconnected;
 
             var options = new LiveKit.RoomOptions { AutoSubscribe = false };
@@ -119,6 +121,11 @@ namespace Thesis.Managers
         private void HandleTrackUnsubscribed(IRemoteTrack track, RemoteTrackPublication pub, RemoteParticipant participant)
         {
             OnTrackUnsubscribed?.Invoke(track, pub, participant);
+        }
+
+        private void HandleParticipantNameChanged(Participant participant)
+        {
+            OnParticipantNameChanged?.Invoke(participant.Identity);
         }
 
         private void HandleDisconnected(Room room)

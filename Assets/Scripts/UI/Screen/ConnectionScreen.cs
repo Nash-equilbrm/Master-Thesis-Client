@@ -11,6 +11,7 @@ namespace Thesis.UI.Screens
     {
         [Header("References")]
         [SerializeField] private TMP_InputField _serverUrlField;
+        [SerializeField] private TMP_InputField _cameraLabelField;
         [SerializeField] private Button _connectButton;
         [SerializeField] private Button _retryButton;
         [SerializeField] private TMP_Text _statusText;
@@ -37,6 +38,7 @@ namespace Thesis.UI.Screens
 
             if (_retryButton != null) _retryButton.gameObject.SetActive(false);
             if (_connectButton != null) _connectButton.interactable = true;
+            if (_cameraLabelField != null) _cameraLabelField.gameObject.SetActive(CameraClientManager.HasInstance);
 
             if (_serverUrlField != null && string.IsNullOrEmpty(_serverUrlField.text))
             {
@@ -125,6 +127,8 @@ namespace Thesis.UI.Screens
                 SetBusy(true);
                 SetStatus("Registering…");
                 RegistrationClient.Instance.ServerUrl = url;
+                if (LiveKitCameraPublisher.HasInstance)
+                    LiveKitCameraPublisher.Instance.Label = _cameraLabelField != null ? _cameraLabelField.text.Trim() : "";
                 CameraClientManager.Instance.StartRegistering();
                 return;
             }

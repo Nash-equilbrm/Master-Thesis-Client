@@ -12,13 +12,6 @@ namespace Thesis.Stream
         [SerializeField] private CameraStreamPlayer _streamPlayer;
         [SerializeField] private Transform _buttonContainer;
 
-        [Header("Camera Identities")]
-        [SerializeField] private string[] _cameraIdentities =
-        {
-            "cam1", "cam2", "cam3", "cam4", "cam5",
-            "cam6", "cam7", "cam8", "cam9", "cam10"
-        };
-
         private readonly Dictionary<string, Button> _buttons = new();
         private string _activeCamera;
 
@@ -29,6 +22,7 @@ namespace Thesis.Stream
             LiveKitManager.Instance.OnConnected += OnConnected;
             LiveKitManager.Instance.OnVideoTrackAvailable += OnVideoTrackAvailable;
             LiveKitManager.Instance.OnVideoTrackRemoved += OnVideoTrackRemoved;
+            LiveKitManager.Instance.OnParticipantNameChanged += OnParticipantNameChanged;
 
             if (LiveKitManager.Instance.IsConnected)
                 OnConnected(LiveKitManager.Instance.Room);
@@ -40,18 +34,13 @@ namespace Thesis.Stream
             LiveKitManager.Instance.OnConnected -= OnConnected;
             LiveKitManager.Instance.OnVideoTrackAvailable -= OnVideoTrackAvailable;
             LiveKitManager.Instance.OnVideoTrackRemoved -= OnVideoTrackRemoved;
+            LiveKitManager.Instance.OnParticipantNameChanged -= OnParticipantNameChanged;
         }
 
         private void OnConnected(LiveKit.Room room)
         {
-            foreach (var identity in _cameraIdentities)
-            {
-                if (!_buttons.ContainsKey(identity))
-                    CreateButton(identity);
-            }
-
             foreach (var identity in LiveKitManager.Instance.VideoTracks.Keys)
-                SetButtonInteractable(identity, true);
+                OnVideoTrackAvailable(identity);
         }
 
         private void OnVideoTrackAvailable(string identity)
@@ -70,6 +59,13 @@ namespace Thesis.Stream
                 _streamPlayer?.Unsubscribe();
                 _activeCamera = null;
             }
+        }
+
+        private void OnParticipantNameChanged(string identity)
+        {
+            if (!_buttons.TryGetValue(identity, out var btn)) return;
+            var label = btn.GetComponentInChildren<TextMeshProUGUI>();
+            if (label != null) label.text = ResolveLabel(identity);
         }
 
         private void SwitchCamera(string identity)
@@ -113,7 +109,7 @@ namespace Thesis.Stream
             textRt.offsetMax = new Vector2(-8, 0);
 
             var label = textGo.AddComponent<TextMeshProUGUI>();
-            label.text = identity.ToUpper();
+            label.text = ResolveLabel(identity);
             label.alignment = TextAlignmentOptions.Center;
             label.fontSize = 16;
             label.fontStyle = FontStyles.Bold;
@@ -122,6 +118,17 @@ namespace Thesis.Stream
             var captured = identity;
             btn.onClick.AddListener(() => SwitchCamera(captured));
             _buttons[identity] = btn;
+        }
+
+        private string ResolveLabel(string identity)
+        {
+            if (LiveKitManager.HasInstance &&
+                LiveKitManager.Instance.Room != null &&
+                LiveKitManager.Instance.Room.RemoteParticipants.TryGetValue(identity, out var participant) &&
+                !string.IsNullOrEmpty(participant.Name))
+                return participant.Name;
+
+            return identity.ToUpper();
         }
 
         private void SetButtonInteractable(string identity, bool interactable)
