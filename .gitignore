@@ -109,3 +109,7 @@ InitTestScene*.unity*
 .idea/
 # Claude settings
 .claude/
+# VS Code settings
+.vscode/
+# Visual Studio Installer config
+.vsconfig

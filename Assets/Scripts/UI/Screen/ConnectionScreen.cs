@@ -38,8 +38,11 @@ namespace Thesis.UI.Screens
             if (_retryButton != null) _retryButton.gameObject.SetActive(false);
             if (_connectButton != null) _connectButton.interactable = true;
 
-            if (ViewerTokenClient.HasInstance && _serverUrlField != null && string.IsNullOrEmpty(_serverUrlField.text))
-                _serverUrlField.text = ViewerTokenClient.Instance.ServerUrl;
+            if (_serverUrlField != null && string.IsNullOrEmpty(_serverUrlField.text))
+            {
+                if (ViewerTokenClient.HasInstance) _serverUrlField.text = ViewerTokenClient.Instance.ServerUrl;
+                else if (RegistrationClient.HasInstance) _serverUrlField.text = RegistrationClient.Instance.ServerUrl;
+            }
 
             if (ViewerTokenClient.HasInstance)
             {
@@ -75,12 +78,6 @@ namespace Thesis.UI.Screens
 
         private void OnConnectClicked()
         {
-            if (!ViewerTokenClient.HasInstance)
-            {
-                SetStatus("No ViewerTokenClient in scene.", isError: true);
-                return;
-            }
-
             var raw = _serverUrlField != null ? _serverUrlField.text.Trim() : "";
             if (string.IsNullOrEmpty(raw))
             {
@@ -93,6 +90,24 @@ namespace Thesis.UI.Screens
                 url = "http://" + url;
             if (!System.Text.RegularExpressions.Regex.IsMatch(url, @":\d+$"))
                 url = url.TrimEnd('/') + ":3000";
+
+            if (CameraClientManager.HasInstance)
+            {
+                if (!RegistrationClient.HasInstance)
+                {
+                    SetStatus("No RegistrationClient in scene.", isError: true);
+                    return;
+                }
+                RegistrationClient.Instance.ServerUrl = url;
+                CameraClientManager.Instance.StartRegistering();
+                return;
+            }
+
+            if (!ViewerTokenClient.HasInstance)
+            {
+                SetStatus("No ViewerTokenClient in scene.", isError: true);
+                return;
+            }
 
             SetBusy(true);
             SetStatus("Fetching token…");

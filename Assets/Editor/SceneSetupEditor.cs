@@ -44,12 +44,34 @@ public static class SceneSetupEditor
     private static void SetupManagers(GameObject managers)
     {
         EnsureComponent<PersistAcrossScenes>(managers);
-        EnsureComponent<ClientManager>(EnsureChild(managers, "ClientManager"));
-        EnsureComponent<LiveKitManager>(EnsureChild(managers, "LiveKitManager"));
-        EnsureComponent<ViewerTokenClient>(EnsureChild(managers, "ViewerTokenClient"));
+
+        GameObject viewerManagers = EnsureChild(managers, "ViewerManagers");
+        EnsureComponent<ClientManager>(EnsureChild(viewerManagers, "ClientManager"));
+        EnsureComponent<LiveKitManager>(EnsureChild(viewerManagers, "LiveKitManager"));
+        EnsureComponent<ViewerTokenClient>(EnsureChild(viewerManagers, "ViewerTokenClient"));
+
+        GameObject cameraManagers = EnsureChild(managers, "CameraManagers");
+        EnsureComponent<CameraClientManager>(EnsureChild(cameraManagers, "CameraClientManager"));
+        EnsureComponent<RegistrationClient>(EnsureChild(cameraManagers, "RegistrationClient"));
+        EnsureComponent<LiveKitCameraPublisher>(EnsureChild(cameraManagers, "LiveKitCameraPublisher"));
+
         EnsureComponent<UIManager>(EnsureChild(managers, "UIManager"));
         EnsureComponent<PubSub>(EnsureChild(managers, "PubSub"));
         EnsureComponent<ObjectPooling>(EnsureChild(managers, "ObjectPooling"));
+
+        AppRoleManager roleManager = EnsureComponent<AppRoleManager>(EnsureChild(managers, "AppRoleManager"));
+        WireAppRoleManager(roleManager, viewerManagers, cameraManagers);
+
+        viewerManagers.SetActive(false);
+        cameraManagers.SetActive(false);
+    }
+
+    private static void WireAppRoleManager(AppRoleManager roleManager, GameObject viewerManagers, GameObject cameraManagers)
+    {
+        SerializedObject so = new SerializedObject(roleManager);
+        so.FindProperty("_viewerManagers").objectReferenceValue = viewerManagers;
+        so.FindProperty("_cameraManagers").objectReferenceValue = cameraManagers;
+        so.ApplyModifiedPropertiesWithoutUndo();
     }
 
     private static void SetupUICanvas(GameObject uiRoot)
