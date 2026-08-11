@@ -45,6 +45,8 @@ public static class SceneSetupEditor
     {
         EnsureComponent<PersistAcrossScenes>(managers);
 
+        EnsureComponent<AppManager>(EnsureChild(managers, "AppManager"));
+
         GameObject viewerManagers = EnsureChild(managers, "ViewerManagers");
         EnsureComponent<ClientManager>(EnsureChild(viewerManagers, "ClientManager"));
         EnsureComponent<LiveKitManager>(EnsureChild(viewerManagers, "LiveKitManager"));

@@ -1,19 +1,19 @@
+using System;
 using Thesis.Stream;
 using Thesis.UI;
-using UnityEngine;
 
 namespace Thesis.UI.Screens
 {
     public class StreamScreen : BaseScreen
     {
-        [Header("References")]
-        [SerializeField] private CameraStreamPlayer _streamPlayer;
-        [SerializeField] private CameraSwitcher _cameraSwitcher;
+        [UnityEngine.Header("References")]
+        [UnityEngine.SerializeField] private CameraStreamPlayer _streamPlayer;
+        [UnityEngine.SerializeField] private CameraSwitcher _cameraSwitcher;
 
-        public override void Hide()
+        public override void Hide(Action onComplete = null)
         {
             _streamPlayer?.Unsubscribe();
-            base.Hide();
+            base.Hide(onComplete);
         }
     }
 }

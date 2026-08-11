@@ -1,3 +1,4 @@
+using System;
 using Thesis.Managers;
 using Thesis.UI;
 using TMPro;
@@ -26,10 +27,10 @@ namespace Thesis.UI.Screens
                 ApplyPreviewTexture(LiveKitCameraPublisher.Instance.Texture);
         }
 
-        public override void Hide()
+        public override void Hide(Action onComplete = null)
         {
             if (_cameraPreview != null) _cameraPreview.texture = null;
-            base.Hide();
+            base.Hide(onComplete);
         }
 
         private void ApplyPreviewTexture(WebCamTexture texture)

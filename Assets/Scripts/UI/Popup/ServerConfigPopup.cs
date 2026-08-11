@@ -18,7 +18,7 @@ namespace Thesis.UI.Popups
             base.Init();
             if (_saveButton  != null) _saveButton.onClick.AddListener(OnSaveClicked);
             if (_resetButton != null) _resetButton.onClick.AddListener(OnResetClicked);
-            if (_closeButton != null) _closeButton.onClick.AddListener(Hide);
+            if (_closeButton != null) _closeButton.onClick.AddListener(() => Hide());
         }
 
         public override void Show(object data)

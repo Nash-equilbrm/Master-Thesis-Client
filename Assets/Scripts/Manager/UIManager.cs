@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Thesis.Patterns;
 using Thesis.UI;
@@ -9,24 +10,24 @@ namespace Thesis.Managers
     {
         public GameObject cScreen, cPopup, cNotify, cOverlap;
 
-        private Dictionary<string, BaseScreen> _screens = new Dictionary<string, BaseScreen>();
-        private Dictionary<string, BasePopup> _popups = new Dictionary<string, BasePopup>();
-        private Dictionary<string, BaseNotify> _notifies = new Dictionary<string, BaseNotify>();
+        private Dictionary<string, BaseScreen>  _screens  = new Dictionary<string, BaseScreen>();
+        private Dictionary<string, BasePopup>   _popups   = new Dictionary<string, BasePopup>();
+        private Dictionary<string, BaseNotify>  _notifies = new Dictionary<string, BaseNotify>();
         private Dictionary<string, BaseOverlap> _overlaps = new Dictionary<string, BaseOverlap>();
 
-        public IReadOnlyDictionary<string, BaseScreen> Screens => _screens;
-        public IReadOnlyDictionary<string, BasePopup> Popups => _popups;
-        public IReadOnlyDictionary<string, BaseNotify> Notifies => _notifies;
+        public IReadOnlyDictionary<string, BaseScreen>  Screens  => _screens;
+        public IReadOnlyDictionary<string, BasePopup>   Popups   => _popups;
+        public IReadOnlyDictionary<string, BaseNotify>  Notifies => _notifies;
         public IReadOnlyDictionary<string, BaseOverlap> Overlaps => _overlaps;
 
-        private BaseScreen _curScreen;
-        private BasePopup _curPopup;
-        private BaseNotify _curNotify;
+        private BaseScreen  _curScreen;
+        private BasePopup   _curPopup;
+        private BaseNotify  _curNotify;
         private BaseOverlap _curOverlap;
 
-        public BaseScreen CurScreen => _curScreen;
-        public BasePopup CurPopup => _curPopup;
-        public BaseNotify CurNotify => _curNotify;
+        public BaseScreen  CurScreen  => _curScreen;
+        public BasePopup   CurPopup   => _curPopup;
+        public BaseNotify  CurNotify  => _curNotify;
         public BaseOverlap CurOverlap => _curOverlap;
 
         private const string SCREEN_PATH  = "Prefabs/UI/Screen/";
@@ -47,10 +48,7 @@ namespace Thesis.Managers
                 if (curName.Equals(name))
                     result = _curScreen;
                 else
-                {
-                    _screens[curName].Hide();
-                    RemoveScreen(curName);
-                }
+                    RemoveScreen(curName);  // animate hide → then destroy
             }
 
             if (result == null)
@@ -90,7 +88,7 @@ namespace Thesis.Managers
             if (prefab == null || !prefab.GetComponent<BaseScreen>())
                 throw new MissingReferenceException($"Cannot find screen prefab: {name}");
             var ob = Instantiate(prefab, cScreen.transform);
-            ob.transform.localScale = Vector3.one;
+            ob.transform.localScale    = Vector3.one;
             ob.transform.localPosition = Vector3.zero;
 #if UNITY_EDITOR
             ob.name = "SCREEN_" + name;
@@ -102,13 +100,15 @@ namespace Thesis.Managers
 
         private void RemoveScreen(string name)
         {
-            if (_screens.ContainsKey(name))
+            if (!_screens.ContainsKey(name)) return;
+            var screen = _screens[name];
+            _screens.Remove(name);
+            screen.Hide(() =>
             {
-                Destroy(_screens[name].gameObject);
-                _screens.Remove(name);
+                if (screen != null) Destroy(screen.gameObject);
                 Resources.UnloadUnusedAssets();
-                System.GC.Collect();
-            }
+                GC.Collect();
+            });
         }
 
         #endregion
@@ -126,10 +126,7 @@ namespace Thesis.Managers
                 if (curName.Equals(name))
                     result = _curPopup;
                 else
-                {
-                    _popups[curName].Hide();
                     RemovePopup(curName);
-                }
             }
 
             if (result == null)
@@ -169,7 +166,7 @@ namespace Thesis.Managers
             if (prefab == null || !prefab.GetComponent<BasePopup>())
                 throw new MissingReferenceException($"Cannot find popup prefab: {name}");
             var ob = Instantiate(prefab, cPopup.transform);
-            ob.transform.localScale = Vector3.one;
+            ob.transform.localScale    = Vector3.one;
             ob.transform.localPosition = Vector3.zero;
 #if UNITY_EDITOR
             ob.name = "POPUP_" + name;
@@ -181,13 +178,15 @@ namespace Thesis.Managers
 
         private void RemovePopup(string name)
         {
-            if (_popups.ContainsKey(name))
+            if (!_popups.ContainsKey(name)) return;
+            var popup = _popups[name];
+            _popups.Remove(name);
+            popup.Hide(() =>
             {
-                Destroy(_popups[name].gameObject);
-                _popups.Remove(name);
+                if (popup != null) Destroy(popup.gameObject);
                 Resources.UnloadUnusedAssets();
-                System.GC.Collect();
-            }
+                GC.Collect();
+            });
         }
 
         #endregion
@@ -205,10 +204,7 @@ namespace Thesis.Managers
                 if (curName.Equals(name))
                     result = _curNotify;
                 else
-                {
-                    _notifies[curName].Hide();
                     RemoveNotify(curName);
-                }
             }
 
             if (result == null)
@@ -248,7 +244,7 @@ namespace Thesis.Managers
             if (prefab == null || !prefab.GetComponent<BaseNotify>())
                 throw new MissingReferenceException($"Cannot find notify prefab: {name}");
             var ob = Instantiate(prefab, cNotify.transform);
-            ob.transform.localScale = Vector3.one;
+            ob.transform.localScale    = Vector3.one;
             ob.transform.localPosition = Vector3.zero;
 #if UNITY_EDITOR
             ob.name = "NOTIFY_" + name;
@@ -260,13 +256,15 @@ namespace Thesis.Managers
 
         private void RemoveNotify(string name)
         {
-            if (_notifies.ContainsKey(name))
+            if (!_notifies.ContainsKey(name)) return;
+            var notify = _notifies[name];
+            _notifies.Remove(name);
+            notify.Hide(() =>
             {
-                Destroy(_notifies[name].gameObject);
-                _notifies.Remove(name);
+                if (notify != null) Destroy(notify.gameObject);
                 Resources.UnloadUnusedAssets();
-                System.GC.Collect();
-            }
+                GC.Collect();
+            });
         }
 
         #endregion
@@ -284,10 +282,7 @@ namespace Thesis.Managers
                 if (curName.Equals(name))
                     result = _curOverlap;
                 else
-                {
-                    _overlaps[curName].Hide();
                     RemoveOverlap(curName);
-                }
             }
 
             if (result == null)
@@ -327,7 +322,7 @@ namespace Thesis.Managers
             if (prefab == null || !prefab.GetComponent<BaseOverlap>())
                 throw new MissingReferenceException($"Cannot find overlap prefab: {name}");
             var ob = Instantiate(prefab, cOverlap.transform);
-            ob.transform.localScale = Vector3.one;
+            ob.transform.localScale    = Vector3.one;
             ob.transform.localPosition = Vector3.zero;
 #if UNITY_EDITOR
             ob.name = "OVERLAP_" + name;
@@ -339,13 +334,15 @@ namespace Thesis.Managers
 
         private void RemoveOverlap(string name)
         {
-            if (_overlaps.ContainsKey(name))
+            if (!_overlaps.ContainsKey(name)) return;
+            var overlap = _overlaps[name];
+            _overlaps.Remove(name);
+            overlap.Hide(() =>
             {
-                Destroy(_overlaps[name].gameObject);
-                _overlaps.Remove(name);
+                if (overlap != null) Destroy(overlap.gameObject);
                 Resources.UnloadUnusedAssets();
-                System.GC.Collect();
-            }
+                GC.Collect();
+            });
         }
 
         #endregion
@@ -354,9 +351,9 @@ namespace Thesis.Managers
         {
             string path = type switch
             {
-                UIType.Screen  => SCREEN_PATH + uiName,
-                UIType.Popup   => POPUP_PATH + uiName,
-                UIType.Notify  => NOTIFY_PATH + uiName,
+                UIType.Screen  => SCREEN_PATH  + uiName,
+                UIType.Popup   => POPUP_PATH   + uiName,
+                UIType.Notify  => NOTIFY_PATH  + uiName,
                 UIType.Overlap => OVERLAP_PATH + uiName,
                 _              => ""
             };

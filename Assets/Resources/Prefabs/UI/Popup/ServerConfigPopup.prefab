@@ -199,11 +199,26 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 73fb61d70c684774b8358446bfcbc2ac, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _showAnim:
+    enabled: 1
+    anims: []
+  _hideAnim:
+    enabled: 1
+    anims:
+    - rid: 1001
   _urlField: {fileID: 2208519722511687875}
   _activeUrlText: {fileID: 1609994207168406916}
   _saveButton: {fileID: 4797544002408443636}
   _resetButton: {fileID: 7797820449023536672}
   _closeButton: {fileID: 800912077772451689}
+  references:
+    version: 2
+    RefIds:
+    - rid: 1001
+      type: {class: FadeAnim, ns: Thesis.UI, asm: Assembly-CSharp}
+      data:
+        duration: 0.3
+        ease: 9
 --- !u!1 &3424899661246608800
 GameObject:
   m_ObjectHideFlags: 0

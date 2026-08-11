@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace Thesis.UI
@@ -14,6 +15,6 @@ namespace Thesis.UI
         }
 
         public override void Show(object data) => base.Show(data);
-        public override void Hide() => base.Hide();
+        public override void Hide(Action onComplete = null) => base.Hide(onComplete);
     }
 }

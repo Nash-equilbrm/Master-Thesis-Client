@@ -1,3 +1,4 @@
+using System;
 using LiveKit;
 using Thesis.Managers;
 using Thesis.UI;
@@ -66,7 +67,7 @@ namespace Thesis.UI.Screens
             SetStatus(data is string msg ? msg : "Press Connect to join the server.");
         }
 
-        public override void Hide()
+        public override void Hide(Action onComplete = null)
         {
             if (ViewerTokenClient.HasInstance)
             {
@@ -92,7 +93,7 @@ namespace Thesis.UI.Screens
                 LiveKitCameraPublisher.Instance.OnConnectionFailed  -= HandleCameraConnectionFailed;
             }
 
-            base.Hide();
+            base.Hide(onComplete);
         }
 
         private void OnConnectClicked()

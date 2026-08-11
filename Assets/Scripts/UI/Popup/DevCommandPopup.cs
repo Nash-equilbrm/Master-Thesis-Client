@@ -16,7 +16,7 @@ namespace Thesis.UI.Popups
             base.Init();
             if (_logViewerButton  != null) _logViewerButton.onClick.AddListener(OnLogViewerClicked);
             if (_serverConfigButton != null) _serverConfigButton.onClick.AddListener(OnServerConfigClicked);
-            if (_closeButton != null) _closeButton.onClick.AddListener(Hide);
+            if (_closeButton != null) _closeButton.onClick.AddListener(() => Hide());
         }
 
         private void OnLogViewerClicked()

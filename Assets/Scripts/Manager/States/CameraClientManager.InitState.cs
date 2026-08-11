@@ -1,4 +1,3 @@
-using UnityEngine;
 using Thesis.Patterns;
 
 namespace Thesis.Managers
@@ -9,14 +8,8 @@ namespace Thesis.Managers
         {
             public InitState(CameraClientManager ctx) : base(ctx) { }
 
-            public override void Enter()
-            {
-                Screen.orientation = ScreenOrientation.LandscapeLeft;
-                Screen.sleepTimeout = SleepTimeout.NeverSleep;
-                Application.targetFrameRate = 60;
-
+            public override void Enter() =>
                 _context.ChangeState(new IdleState(_context), CameraState.Idle);
-            }
         }
     }
 }
