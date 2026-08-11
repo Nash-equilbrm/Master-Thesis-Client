@@ -56,6 +56,7 @@ public static class SceneSetupEditor
         EnsureComponent<LiveKitCameraPublisher>(EnsureChild(cameraManagers, "LiveKitCameraPublisher"));
 
         EnsureComponent<UIManager>(EnsureChild(managers, "UIManager"));
+        EnsureComponent<DevCommandMenu>(EnsureChild(managers, "DevCommandMenu"));
         EnsureComponent<PubSub>(EnsureChild(managers, "PubSub"));
         EnsureComponent<ObjectPooling>(EnsureChild(managers, "ObjectPooling"));
 

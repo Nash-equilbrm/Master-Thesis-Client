@@ -1818,7 +1818,9 @@ public class Reporter : MonoBehaviour
 	float lastUpdate2 = 0;
 #endif
 
-	void doShow()
+	public System.Action OnGestureDetected;
+
+	public void doShow()
 	{
 		show = true;
 		currentView = ReportView.Logs;
@@ -1851,7 +1853,10 @@ public class Reporter : MonoBehaviour
 
 		calculateStartIndex();
 		if (!show && isGestureDone()) {
-			doShow();
+			if (OnGestureDetected != null)
+				OnGestureDetected.Invoke();
+			else
+				doShow();
 		}
 
 

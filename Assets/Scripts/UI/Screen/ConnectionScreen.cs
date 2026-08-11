@@ -10,7 +10,6 @@ namespace Thesis.UI.Screens
     public class ConnectionScreen : BaseScreen
     {
         [Header("References")]
-        [SerializeField] private TMP_InputField _serverUrlField;
         [SerializeField] private TMP_InputField _cameraLabelField;
         [SerializeField] private Button _connectButton;
         [SerializeField] private Button _retryButton;
@@ -40,12 +39,6 @@ namespace Thesis.UI.Screens
             if (_connectButton != null) _connectButton.interactable = true;
             if (_cameraLabelField != null) _cameraLabelField.gameObject.SetActive(CameraClientManager.HasInstance);
 
-            if (_serverUrlField != null && string.IsNullOrEmpty(_serverUrlField.text))
-            {
-                if (ViewerTokenClient.HasInstance) _serverUrlField.text = ViewerTokenClient.Instance.ServerUrl;
-                else if (RegistrationClient.HasInstance) _serverUrlField.text = RegistrationClient.Instance.ServerUrl;
-            }
-
             if (ViewerTokenClient.HasInstance)
             {
                 ViewerTokenClient.Instance.OnTokenReceived  += HandleTokenReceived;
@@ -70,7 +63,7 @@ namespace Thesis.UI.Screens
                 LiveKitCameraPublisher.Instance.OnConnectionFailed  += HandleCameraConnectionFailed;
             }
 
-            SetStatus(data is string msg ? msg : "Enter the server URL and press Connect.");
+            SetStatus(data is string msg ? msg : "Press Connect to join the server.");
         }
 
         public override void Hide()
@@ -104,18 +97,7 @@ namespace Thesis.UI.Screens
 
         private void OnConnectClicked()
         {
-            var raw = _serverUrlField != null ? _serverUrlField.text.Trim() : "";
-            if (string.IsNullOrEmpty(raw))
-            {
-                SetStatus("Server URL is required.", isError: true);
-                return;
-            }
-
-            var url = raw;
-            if (!url.StartsWith("http://") && !url.StartsWith("https://"))
-                url = "http://" + url;
-            if (!System.Text.RegularExpressions.Regex.IsMatch(url, @":\d+$"))
-                url = url.TrimEnd('/') + ":3000";
+            var url = Thesis.AppConfig.ServerUrl;
 
             if (CameraClientManager.HasInstance)
             {
