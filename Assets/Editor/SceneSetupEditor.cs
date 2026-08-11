@@ -46,6 +46,7 @@ public static class SceneSetupEditor
         EnsureComponent<PersistAcrossScenes>(managers);
 
         EnsureComponent<AppManager>(EnsureChild(managers, "AppManager"));
+        EnsureComponent<RoomClient>(EnsureChild(managers, "RoomClient"));
 
         GameObject viewerManagers = EnsureChild(managers, "ViewerManagers");
         EnsureComponent<ClientManager>(EnsureChild(viewerManagers, "ClientManager"));

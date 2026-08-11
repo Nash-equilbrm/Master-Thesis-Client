@@ -14,6 +14,9 @@ namespace Thesis.Managers
 
         protected override string Endpoint => "/register";
 
+        protected override string GetRequestBody() =>
+            $"{{\"roomCode\":\"{Thesis.AppConfig.RoomCode}\",\"userId\":\"{Thesis.AppConfig.UserId}\",\"username\":\"{Thesis.AppConfig.Username}\"}}";
+
         public void Register()
         {
             StartCoroutine(PostWithRetry(

@@ -3,7 +3,7 @@ using Thesis.Patterns;
 
 namespace Thesis.Managers
 {
-    public enum AppState { Init, RoleSelect, AppRunning }
+    public enum AppState { Init, RoomEntry, RoleSelect, AppRunning }
 
     public partial class AppManager : Singleton<AppManager>
     {

@@ -39,6 +39,8 @@ namespace Thesis.Managers
             onFailure?.Invoke(failureMessage);
         }
 
+        protected virtual string GetRequestBody() => null;
+
         private IEnumerator TryPostOnce()
         {
             _lastAttemptSucceeded = false;
@@ -46,6 +48,10 @@ namespace Thesis.Managers
             using UnityWebRequest req = new UnityWebRequest(_serverUrl + Endpoint, "POST");
             req.downloadHandler = new DownloadHandlerBuffer();
             req.SetRequestHeader("Content-Type", "application/json");
+
+            var body = GetRequestBody();
+            if (body != null)
+                req.uploadHandler = new UploadHandlerRaw(System.Text.Encoding.UTF8.GetBytes(body));
 
             yield return req.SendWebRequest();
 

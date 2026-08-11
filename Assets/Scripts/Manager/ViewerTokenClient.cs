@@ -13,6 +13,9 @@ namespace Thesis.Managers
 
         protected override string Endpoint => "/viewer-token";
 
+        protected override string GetRequestBody() =>
+            $"{{\"roomCode\":\"{Thesis.AppConfig.RoomCode}\",\"userId\":\"{Thesis.AppConfig.UserId}\",\"username\":\"{Thesis.AppConfig.Username}\"}}";
+
         public void FetchToken(string serverUrl)
         {
             _serverUrl = serverUrl.TrimEnd('/');

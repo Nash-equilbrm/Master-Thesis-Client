@@ -18,7 +18,7 @@ namespace Thesis.Managers
 
                 DOTween.Init();
 
-                _context.ChangeState(new RoleSelectState(_context), AppState.RoleSelect);
+                _context.ChangeState(new RoomEntryState(_context), AppState.RoomEntry);
             }
         }
     }
