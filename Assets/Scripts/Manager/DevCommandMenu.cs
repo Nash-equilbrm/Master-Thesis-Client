@@ -16,7 +16,7 @@ namespace Thesis.Managers
 
         private void OnGestureDetected()
         {
-            UIManager.Instance.ShowPopup<DevCommandPopup>();
+            UIManager.Instance.ShowPopup<DevCommandPopup>(forceShow: true);
         }
 
         public void OpenReporter()

@@ -29,7 +29,7 @@ namespace Thesis.UI.Popups
         private void OnServerConfigClicked()
         {
             Hide();
-            UIManager.Instance.ShowPopup<ServerConfigPopup>();
+            UIManager.Instance.ShowPopup<ServerConfigPopup>(forceShow: true);
         }
     }
 }
