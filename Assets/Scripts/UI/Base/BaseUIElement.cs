@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using DG.Tweening;
 using UnityEngine;
 
@@ -20,6 +21,7 @@ namespace Thesis.UI
         private Vector2 _restPosition;
         private Vector3 _restScale;
         private Sequence _tweenSeq;
+        private readonly List<Action> _pendingHideCallbacks = new List<Action>();
 
         public bool IsInited => _isInited;
         public bool IsHide => isHide;
@@ -51,6 +53,19 @@ namespace Thesis.UI
 
         public virtual void Hide(Action onComplete = null)
         {
+            if (isHide)
+            {
+                // Already hidden or hiding — don't restart the animation (which would
+                // Kill() the in-flight tween and silently drop its onComplete). Just
+                // queue this callback to run alongside/after the existing one.
+                if (onComplete == null) return;
+                if (_tweenSeq != null && _tweenSeq.IsActive())
+                    _pendingHideCallbacks.Add(onComplete);
+                else
+                    onComplete.Invoke();
+                return;
+            }
+
             isHide = true;
             canvasGroup.blocksRaycasts = false;
             AnimateHide(_hideAnim, onComplete);
@@ -67,6 +82,7 @@ namespace Thesis.UI
         {
             _tweenSeq?.Kill(false);
             _tweenSeq = null;
+            _pendingHideCallbacks.Clear();
 
             canvasGroup.alpha    = 1f;
             transform.localScale = _restScale;
@@ -97,6 +113,7 @@ namespace Thesis.UI
                 _rt.anchoredPosition = _restPosition;
                 gameObject.SetActive(false);
                 onComplete?.Invoke();
+                FlushPendingHideCallbacks();
                 return;
             }
 
@@ -112,7 +129,17 @@ namespace Thesis.UI
                 _rt.anchoredPosition = _restPosition;
                 gameObject.SetActive(false);
                 onComplete?.Invoke();
+                FlushPendingHideCallbacks();
             }).Play();
+        }
+
+        private void FlushPendingHideCallbacks()
+        {
+            if (_pendingHideCallbacks.Count == 0) return;
+            var callbacks = _pendingHideCallbacks.ToArray();
+            _pendingHideCallbacks.Clear();
+            foreach (var cb in callbacks)
+                cb?.Invoke();
         }
 
         private static bool HasAnims(UIAnimConfig cfg)

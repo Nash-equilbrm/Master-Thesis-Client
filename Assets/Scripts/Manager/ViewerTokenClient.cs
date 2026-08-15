@@ -14,7 +14,12 @@ namespace Thesis.Managers
         protected override string Endpoint => "/viewer-token";
 
         protected override string GetRequestBody() =>
-            $"{{\"roomCode\":\"{Thesis.AppConfig.RoomCode}\",\"userId\":\"{Thesis.AppConfig.UserId}\",\"username\":\"{Thesis.AppConfig.Username}\"}}";
+            JsonUtility.ToJson(new ViewerTokenRequest
+            {
+                roomCode = Thesis.AppConfig.RoomCode,
+                userId   = Thesis.AppConfig.UserId,
+                username = Thesis.AppConfig.Username
+            });
 
         public void FetchToken(string serverUrl)
         {
@@ -44,6 +49,14 @@ namespace Thesis.Managers
         {
             public string token;
             public string livekit_url;
+        }
+
+        [Serializable]
+        private class ViewerTokenRequest
+        {
+            public string roomCode;
+            public string userId;
+            public string username;
         }
     }
 }

@@ -100,11 +100,14 @@ namespace Thesis.Managers
 
         private void RemoveScreen(string name)
         {
-            if (!_screens.ContainsKey(name)) return;
-            var screen = _screens[name];
-            _screens.Remove(name);
+            if (!_screens.TryGetValue(name, out var screen)) return;
+            // Keep the entry in the dictionary while it animates out, so a
+            // same-type ShowScreen<T>() called before the hide finishes reuses
+            // this instance instead of instantiating a duplicate.
             screen.Hide(() =>
             {
+                if (_screens.TryGetValue(name, out var current) && current == screen)
+                    _screens.Remove(name);
                 if (screen != null) Destroy(screen.gameObject);
                 Resources.UnloadUnusedAssets();
                 GC.Collect();
@@ -178,11 +181,11 @@ namespace Thesis.Managers
 
         private void RemovePopup(string name)
         {
-            if (!_popups.ContainsKey(name)) return;
-            var popup = _popups[name];
-            _popups.Remove(name);
+            if (!_popups.TryGetValue(name, out var popup)) return;
             popup.Hide(() =>
             {
+                if (_popups.TryGetValue(name, out var current) && current == popup)
+                    _popups.Remove(name);
                 if (popup != null) Destroy(popup.gameObject);
                 Resources.UnloadUnusedAssets();
                 GC.Collect();
@@ -256,11 +259,11 @@ namespace Thesis.Managers
 
         private void RemoveNotify(string name)
         {
-            if (!_notifies.ContainsKey(name)) return;
-            var notify = _notifies[name];
-            _notifies.Remove(name);
+            if (!_notifies.TryGetValue(name, out var notify)) return;
             notify.Hide(() =>
             {
+                if (_notifies.TryGetValue(name, out var current) && current == notify)
+                    _notifies.Remove(name);
                 if (notify != null) Destroy(notify.gameObject);
                 Resources.UnloadUnusedAssets();
                 GC.Collect();
@@ -334,11 +337,11 @@ namespace Thesis.Managers
 
         private void RemoveOverlap(string name)
         {
-            if (!_overlaps.ContainsKey(name)) return;
-            var overlap = _overlaps[name];
-            _overlaps.Remove(name);
+            if (!_overlaps.TryGetValue(name, out var overlap)) return;
             overlap.Hide(() =>
             {
+                if (_overlaps.TryGetValue(name, out var current) && current == overlap)
+                    _overlaps.Remove(name);
                 if (overlap != null) Destroy(overlap.gameObject);
                 Resources.UnloadUnusedAssets();
                 GC.Collect();

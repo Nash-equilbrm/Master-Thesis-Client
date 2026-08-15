@@ -15,7 +15,12 @@ namespace Thesis.Managers
         protected override string Endpoint => "/register";
 
         protected override string GetRequestBody() =>
-            $"{{\"roomCode\":\"{Thesis.AppConfig.RoomCode}\",\"userId\":\"{Thesis.AppConfig.UserId}\",\"username\":\"{Thesis.AppConfig.Username}\"}}";
+            JsonUtility.ToJson(new RegistrationRequest
+            {
+                roomCode = Thesis.AppConfig.RoomCode,
+                userId   = Thesis.AppConfig.UserId,
+                username = Thesis.AppConfig.Username
+            });
 
         public void Register()
         {
@@ -44,6 +49,14 @@ namespace Thesis.Managers
             public string identity;
             public string token;
             public string livekit_url;
+        }
+
+        [Serializable]
+        private class RegistrationRequest
+        {
+            public string roomCode;
+            public string userId;
+            public string username;
         }
     }
 }

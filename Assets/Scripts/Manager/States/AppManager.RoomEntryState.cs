@@ -11,16 +11,18 @@ namespace Thesis.Managers
 
             public override void Enter()
             {
-                RoomClient.Instance.OnRoomReady += OnRoomReady;
                 UIManager.Instance.ShowScreen<RoomScreen>(forceShow: true);
+                var screen = UIManager.Instance.GetExistScreen<RoomScreen>();
+                if (screen != null) screen.OnEntryComplete += OnEntryComplete;
             }
 
             public override void Exit()
             {
-                RoomClient.Instance.OnRoomReady -= OnRoomReady;
+                var screen = UIManager.Instance.GetExistScreen<RoomScreen>();
+                if (screen != null) screen.OnEntryComplete -= OnEntryComplete;
             }
 
-            private void OnRoomReady(string _) =>
+            private void OnEntryComplete() =>
                 _context.ChangeState(new RoleSelectState(_context), AppState.RoleSelect);
         }
     }

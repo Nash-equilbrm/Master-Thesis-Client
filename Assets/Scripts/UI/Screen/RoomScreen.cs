@@ -24,6 +24,12 @@ namespace Thesis.UI.Screens
 
         private bool _wasCreator;
 
+        /// Fires once this screen's job is done: immediately for a joiner (room
+        /// ready), or when the creator taps Continue after seeing the room code.
+        /// AppManager waits on this instead of RoomClient.OnRoomReady directly, so
+        /// it can't race ahead of the "show code, wait for Continue" flow below.
+        public event Action OnEntryComplete;
+
         public override void Init()
         {
             base.Init();
@@ -31,7 +37,7 @@ namespace Thesis.UI.Screens
             if (_joinButton     != null) _joinButton.onClick.AddListener(OnJoinClicked);
             if (_continueButton != null)
             {
-                _continueButton.onClick.AddListener(() => Hide());
+                _continueButton.onClick.AddListener(() => OnEntryComplete?.Invoke());
                 _continueButton.gameObject.SetActive(false);
             }
         }
@@ -94,7 +100,7 @@ namespace Thesis.UI.Screens
             }
             else
             {
-                Hide();
+                OnEntryComplete?.Invoke();
             }
         }
 
