@@ -19,7 +19,8 @@ namespace Thesis.Managers
             {
                 roomCode = Thesis.AppConfig.RoomCode,
                 userId   = Thesis.AppConfig.UserId,
-                username = Thesis.AppConfig.Username
+                username = Thesis.AppConfig.Username,
+                deviceId = Thesis.AppConfig.UserId,
             });
 
         public void Register()
@@ -57,6 +58,7 @@ namespace Thesis.Managers
             public string roomCode;
             public string userId;
             public string username;
+            public string deviceId;
         }
     }
 }
