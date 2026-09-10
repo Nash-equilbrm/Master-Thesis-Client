@@ -4,7 +4,7 @@ namespace Thesis
 {
     public static class AppConfig
     {
-        public const string DefaultServerUrl = "http://localhost:3000";
+        public const string DefaultServerUrl = "http://13.228.8.204:3000";
 
         private const string ServerUrlKey = "dev_server_url";
         private const string UserIdKey    = "user_id";
