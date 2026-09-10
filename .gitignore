@@ -113,3 +113,7 @@ InitTestScene*.unity*
 .vscode/
 # Visual Studio Installer config
 .vsconfig
+
+# Third-party asset store packages (imported locally, not committed)
+/[Aa]ssets/OpenCVForUnity/
+/[Aa]ssets/OpenCVForUnity.meta
