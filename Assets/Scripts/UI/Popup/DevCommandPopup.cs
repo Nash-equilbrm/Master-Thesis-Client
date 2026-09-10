@@ -9,14 +9,16 @@ namespace Thesis.UI.Popups
         [Header("References")]
         [SerializeField] private Button _logViewerButton;
         [SerializeField] private Button _serverConfigButton;
+        [SerializeField] private Button _charucoBoardButton;
         [SerializeField] private Button _closeButton;
 
         public override void Init()
         {
             base.Init();
-            if (_logViewerButton  != null) _logViewerButton.onClick.AddListener(OnLogViewerClicked);
+            if (_logViewerButton    != null) _logViewerButton.onClick.AddListener(OnLogViewerClicked);
             if (_serverConfigButton != null) _serverConfigButton.onClick.AddListener(OnServerConfigClicked);
-            if (_closeButton != null) _closeButton.onClick.AddListener(() => Hide());
+            if (_charucoBoardButton != null) _charucoBoardButton.onClick.AddListener(OnCharucoBoardClicked);
+            if (_closeButton        != null) _closeButton.onClick.AddListener(() => Hide());
         }
 
         private void OnLogViewerClicked()
@@ -30,6 +32,12 @@ namespace Thesis.UI.Popups
         {
             Hide();
             UIManager.Instance.ShowPopup<ServerConfigPopup>(forceShow: true);
+        }
+
+        private void OnCharucoBoardClicked()
+        {
+            Hide();
+            UIManager.Instance.ShowPopup<CharucoBoardPopup>(forceShow: true);
         }
     }
 }
