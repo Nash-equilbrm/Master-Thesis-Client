@@ -2,6 +2,7 @@ using System.IO;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using Thesis.Managers;
 
 namespace Thesis.Calibration {
 
@@ -9,6 +10,7 @@ namespace Thesis.Calibration {
     /// Coordinates calibration for two cameras and exports calibration.json.
     ///
     /// Workflow:
+    /// 0. Fetch the server-provided ChArUco BoardConfig and Configure() both calibrators
     /// 1. Load cam1 intrinsics video → Process → Calibrate Intrinsics
     /// 2. Load cam2 intrinsics video → Process → Calibrate Intrinsics
     /// 3. Pause both videos on a frame where the board is visible → Capture Extrinsics
@@ -57,6 +59,38 @@ namespace Thesis.Calibration {
             cam2Calibrator.OnIntrinsicsCalibrated += i => _data.cam2.intrinsics = i;
             cam1Calibrator.OnExtrinsicsEstimated += e => _data.cam1.extrinsics = e;
             cam2Calibrator.OnExtrinsicsEstimated += e => _data.cam2.extrinsics = e;
+
+            SetCalibrationButtonsInteractable(false);
+            if (globalStatusText) globalStatusText.text = "Fetching board configuration…";
+
+            if (!CalibrationConfigClient.HasInstance) {
+                Debug.LogWarning("[SceneCalibrator] No CalibrationConfigClient in scene — using default board config.");
+                ApplyBoardConfig(BoardConfig.Default);
+                return;
+            }
+
+            CalibrationConfigClient.Instance.OnConfigReady += ApplyBoardConfig;
+            CalibrationConfigClient.Instance.FetchConfig(Thesis.AppConfig.ServerUrl);
+        }
+
+        private void OnDestroy() {
+            if (CalibrationConfigClient.HasInstance)
+                CalibrationConfigClient.Instance.OnConfigReady -= ApplyBoardConfig;
+        }
+
+        private void ApplyBoardConfig(BoardConfig config) {
+            cam1Calibrator.Configure(config);
+            cam2Calibrator.Configure(config);
+            SetCalibrationButtonsInteractable(true);
+            if (globalStatusText) globalStatusText.text = "Board config ready — begin calibration.";
+        }
+
+        private void SetCalibrationButtonsInteractable(bool value) {
+            if (processCam1Button) processCam1Button.interactable = value;
+            if (calibrateCam1Button) calibrateCam1Button.interactable = value;
+            if (processCam2Button) processCam2Button.interactable = value;
+            if (calibrateCam2Button) calibrateCam2Button.interactable = value;
+            if (captureExtrinsicsButton) captureExtrinsicsButton.interactable = value;
         }
 
         private void CaptureExtrinsics() {

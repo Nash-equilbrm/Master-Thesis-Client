@@ -11,19 +11,19 @@ using UnityRect = UnityEngine.Rect;
 namespace Thesis.Calibration {
 
     /// <summary>
-    /// Processes a recorded video to calibrate one camera using a ChArUco board.
-    /// Step 1 — call StartProcessingVideo(): accumulates frames with board detected.
+    /// Calibrates one camera using a ChArUco board. Board identity comes from a
+    /// server-provided BoardConfig (via Configure()), so every camera calibrates
+    /// against the same physical board.
+    /// Frame source is decoupled from the OpenCV pipeline: the offline VideoPlayer-
+    /// driven path (StartProcessingVideo) and the live WebCamTexture-driven path
+    /// (ProcessLiveFrame/EstimatePoseFromTexture) both feed the same processing.
+    /// Step 1 — call StartProcessingVideo() or ProcessLiveFrame() per frame: accumulates
+    ///          frames with the board detected.
     /// Step 2 — call CalibrateIntrinsics(): computes fx/fy/cx/cy from accumulated frames.
-    /// Step 3 — call EstimatePoseFromCurrentFrame(): with board in view, computes rvec/tvec.
+    /// Step 3 — call EstimatePoseFromCurrentFrame() / EstimatePoseFromTexture(): with the
+    ///          board in view, computes rvec/tvec.
     /// </summary>
     public class CameraCalibrator : MonoBehaviour {
-
-        [Header("Board Parameters")]
-        public int boardSquaresX = 5;
-        public int boardSquaresY = 7;
-        public float squareLengthM = 0.030f;
-        public float markerLengthM = 0.015f;
-        public int dictionaryId = Aruco.DICT_5X5_250;
 
         [Header("Calibration Settings")]
         public int minFramesForCalibration = 30;
@@ -38,6 +38,7 @@ namespace Thesis.Calibration {
         public ExtrinsicsData Extrinsics { get; private set; }
         public bool IsCalibrated { get; private set; }
         public bool HasExtrinsics { get; private set; }
+        public bool IsConfigured { get; private set; }
         public int AccumulatedFrames => _allCharucoCorners.Count;
 
         public event Action<IntrinsicsData> OnIntrinsicsCalibrated;
@@ -56,13 +57,6 @@ namespace Thesis.Calibration {
         private Mat _frameMat;
         private Mat _grayMat;
 
-        private void Awake() {
-            _dictionary = Aruco.getPredefinedDictionary(dictionaryId);
-            _detectorParams = DetectorParameters.create();
-            _detectorParams.set_cornerRefinementMethod(1);
-            _board = CharucoBoard.create(boardSquaresX, boardSquaresY, squareLengthM, markerLengthM, _dictionary);
-        }
-
         private void OnDestroy() {
             _dictionary?.Dispose();
             _board?.Dispose();
@@ -73,9 +67,28 @@ namespace Thesis.Calibration {
             if (_readbackTex) Destroy(_readbackTex);
         }
 
-        // ── Step 1 ──────────────────────────────────────────────────────────────
+        // ── Board configuration ─────────────────────────────────────────────────
+
+        /// <summary>Builds the ChArUco board from a server-provided config. Must be
+        /// called before any of the steps below run.</summary>
+        public void Configure(BoardConfig config) {
+            _dictionary?.Dispose();
+            _board?.Dispose();
+            _detectorParams?.Dispose();
+
+            _dictionary = Aruco.getPredefinedDictionary(config.dictionaryId);
+            _detectorParams = DetectorParameters.create();
+            _detectorParams.set_cornerRefinementMethod(1);
+            _board = CharucoBoard.create(config.squaresX, config.squaresY,
+                config.SquareLengthM, config.MarkerLengthM, _dictionary);
+
+            IsConfigured = true;
+        }
+
+        // ── Step 1 (offline, VideoPlayer-driven) ────────────────────────────────
 
         public void StartProcessingVideo() {
+            if (!RequireConfigured()) return;
             if (_isProcessing) return;
             _isProcessing = true;
             _frameCounter = 0;
@@ -96,6 +109,15 @@ namespace Thesis.Calibration {
             if (_frameCounter % captureEveryNFrames != 0) return;
 
             if (vp.texture is not RenderTexture rt) return;
+            ProcessFrameForIntrinsics(rt);
+        }
+
+        // ── Step 1 (live, WebCamTexture-driven) ─────────────────────────────────
+
+        /// <summary>Feeds one live frame into intrinsics accumulation. Caller is
+        /// responsible for its own frame-rate throttling (e.g. captureEveryNFrames).</summary>
+        public void ProcessLiveFrame(RenderTexture rt) {
+            if (!RequireConfigured()) return;
             ProcessFrameForIntrinsics(rt);
         }
 
@@ -136,6 +158,7 @@ namespace Thesis.Calibration {
         // ── Step 2 ──────────────────────────────────────────────────────────────
 
         public void CalibrateIntrinsics() {
+            if (!RequireConfigured()) return;
             if (_allCharucoCorners.Count < minFramesForCalibration) {
                 Log($"Need {minFramesForCalibration} frames, have {_allCharucoCorners.Count}");
                 return;
@@ -178,12 +201,19 @@ namespace Thesis.Calibration {
         // ── Step 3 ──────────────────────────────────────────────────────────────
 
         /// <summary>
-        /// Reads the current video frame and estimates the board pose.
+        /// Reads the current VideoPlayer frame and estimates the board pose.
         /// Both cameras should be paused at a frame where the board is visible.
         /// </summary>
         public bool EstimatePoseFromCurrentFrame() {
+            if (videoPlayer == null || videoPlayer.texture is not RenderTexture rt) return false;
+            return EstimatePoseFromTexture(rt);
+        }
+
+        /// <summary>Live-frame entry point — same pose-estimation pipeline, explicit
+        /// RenderTexture source instead of a VideoPlayer.</summary>
+        public bool EstimatePoseFromTexture(RenderTexture rt) {
+            if (!RequireConfigured()) return false;
             if (!IsCalibrated) { Log("Must calibrate intrinsics first."); return false; }
-            if (videoPlayer.texture is not RenderTexture rt) return false;
 
             EnsureReadbackTex(rt.width, rt.height);
             ReadFromRT(rt);
@@ -250,6 +280,12 @@ namespace Thesis.Calibration {
             DisposeAccumulatedFrames();
             IsCalibrated = false;
             Log("Reset.");
+        }
+
+        private bool RequireConfigured() {
+            if (IsConfigured) return true;
+            Log("Not configured — call Configure(BoardConfig) first.");
+            return false;
         }
 
         private void DisposeAccumulatedFrames() {

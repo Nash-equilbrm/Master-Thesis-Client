@@ -1,7 +1,24 @@
 using System;
 using UnityEngine;
+using OpenCVForUnity.ArucoModule;
 
 namespace Thesis.Calibration {
+
+    // Board identity (dictionary + grid + physical size) is server-provided so every
+    // camera calibrates against the same physical ChArUco board — see CalibrationConfigClient.
+    [Serializable]
+    public class BoardConfig {
+        public int dictionaryId = Aruco.DICT_5X5_250;
+        public int squaresX = 5;
+        public int squaresY = 7;
+        public float squareLengthMm = 30f;
+        public float markerLengthMm = 15f;
+
+        public float SquareLengthM => squareLengthMm / 1000f;
+        public float MarkerLengthM => markerLengthMm / 1000f;
+
+        public static BoardConfig Default => new BoardConfig();
+    }
 
     [Serializable]
     public class IntrinsicsData {

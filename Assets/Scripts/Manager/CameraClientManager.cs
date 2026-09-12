@@ -11,6 +11,7 @@ namespace Thesis.Managers
         Idle,
         Registering,
         Connecting,
+        Calibrating,
         Streaming,
         Error
     }

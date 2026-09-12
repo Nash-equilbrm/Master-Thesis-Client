@@ -2,19 +2,18 @@ using System.IO;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
-using OpenCVForUnity.CoreModule;
-using OpenCVForUnity.ArucoModule;
-using OpenCVForUnity.ImgcodecsModule;
+using Thesis.Calibration;
+using Thesis.Managers;
 
 namespace Thesis.UI.Popups
 {
+    // Board parameters are no longer freely editable here — they come from
+    // CalibrationConfigClient (server-provided), so this dev tool can never print a
+    // board that disagrees with what the live calibration tutorial expects.
     public class CharucoBoardPopup : BasePopup
     {
-        [Header("Board Parameters")]
-        [SerializeField] private TMP_InputField _squaresXField;
-        [SerializeField] private TMP_InputField _squaresYField;
-        [SerializeField] private TMP_InputField _squareLengthMmField;
-        [SerializeField] private TMP_InputField _markerLengthMmField;
+        [Header("Board Info (read-only, from server)")]
+        [SerializeField] private TMP_Text _boardInfoText;
 
         [Header("Save Location")]
         [SerializeField] private TMP_InputField _saveDirField;
@@ -24,11 +23,7 @@ namespace Thesis.UI.Popups
         [SerializeField] private Button _closeButton;
         [SerializeField] private TMP_Text _statusText;
 
-        private const string PrefSquaresX        = "charuco_squaresX";
-        private const string PrefSquaresY        = "charuco_squaresY";
-        private const string PrefSquareLengthMm  = "charuco_squareMm";
-        private const string PrefMarkerLengthMm  = "charuco_markerMm";
-        private const string PrefSaveDir         = "charuco_saveDir";
+        private const string PrefSaveDir = "charuco_saveDir";
 
         public override void Init()
         {
@@ -42,11 +37,52 @@ namespace Thesis.UI.Popups
             base.Show(data);
             LoadPrefs();
             SetStatus("");
+
+            if (_saveDirField != null)
+                _saveDirField.text = PlayerPrefs.GetString(PrefSaveDir, Application.persistentDataPath);
+
+            if (CalibrationConfigClient.HasInstance && CalibrationConfigClient.Instance.Config != null)
+            {
+                ShowBoardInfo(CalibrationConfigClient.Instance.Config);
+            }
+            else
+            {
+                SetBoardInfoText("Fetching board configuration…");
+                if (CalibrationConfigClient.HasInstance)
+                {
+                    CalibrationConfigClient.Instance.OnConfigReady += ShowBoardInfo;
+                    CalibrationConfigClient.Instance.FetchConfig(Thesis.AppConfig.ServerUrl);
+                }
+                else
+                {
+                    ShowBoardInfo(BoardConfig.Default);
+                }
+            }
+        }
+
+        public override void Hide(System.Action onComplete = null)
+        {
+            if (CalibrationConfigClient.HasInstance)
+                CalibrationConfigClient.Instance.OnConfigReady -= ShowBoardInfo;
+            base.Hide(onComplete);
+        }
+
+        private void ShowBoardInfo(BoardConfig config)
+        {
+            SetBoardInfoText($"{config.squaresX}×{config.squaresY} squares, " +
+                              $"{config.squareLengthMm:F1}mm / {config.markerLengthMm:F1}mm, dict {config.dictionaryId}");
+        }
+
+        private void SetBoardInfoText(string msg)
+        {
+            if (_boardInfoText != null) _boardInfoText.text = msg;
         }
 
         private void OnGenerate()
         {
-            if (!TryParseInputs(out int sqX, out int sqY, out float sqMm, out float mMm)) return;
+            var config = CalibrationConfigClient.HasInstance && CalibrationConfigClient.Instance.Config != null
+                ? CalibrationConfigClient.Instance.Config
+                : BoardConfig.Default;
 
             string dir = _saveDirField != null ? _saveDirField.text.Trim() : Application.persistentDataPath;
             if (string.IsNullOrEmpty(dir)) dir = Application.persistentDataPath;
@@ -61,69 +97,28 @@ namespace Thesis.UI.Popups
                 return;
             }
 
-            var dict  = Aruco.getPredefinedDictionary(Aruco.DICT_5X5_250);
-            var board = CharucoBoard.create(sqX, sqY, sqMm / 1000f, mMm / 1000f, dict);
-
-            int outputW = 2100;
-            int outputH = Mathf.RoundToInt(outputW * sqY / (float)sqX);
-            var img = new Mat();
-            board.draw(new Size(outputW, outputH), img, 20, 1);
-
+            byte[] png = CharucoBoardGenerator.GeneratePng(config);
             string path = Path.Combine(dir, "CalibrationBoard.png");
-            bool ok = Imgcodecs.imwrite(path, img);
 
-            img.Dispose();
-            board.Dispose();
-            dict.Dispose();
-
-            if (ok)
+            try
             {
-                SavePrefs(sqX, sqY, sqMm, mMm, dir);
-                SetStatus($"Saved:\n{path}");
-                Debug.Log($"[CharucoBoardPopup] Board saved to {path}");
+                File.WriteAllBytes(path, png);
             }
-            else
+            catch (System.Exception e)
             {
-                SetStatus("Failed to write image — check the directory path.");
+                SetStatus($"Failed to write image: {e.Message}");
+                return;
             }
-        }
 
-        private bool TryParseInputs(out int sqX, out int sqY, out float sqMm, out float mMm)
-        {
-            sqX = 5; sqY = 7; sqMm = 30f; mMm = 15f;
-
-            if (!int.TryParse(_squaresXField?.text, out sqX) || sqX < 3)
-            { SetStatus("Squares X must be ≥ 3."); return false; }
-
-            if (!int.TryParse(_squaresYField?.text, out sqY) || sqY < 3)
-            { SetStatus("Squares Y must be ≥ 3."); return false; }
-
-            if (!float.TryParse(_squareLengthMmField?.text, out sqMm) || sqMm <= 0)
-            { SetStatus("Square length must be > 0."); return false; }
-
-            if (!float.TryParse(_markerLengthMmField?.text, out mMm) || mMm <= 0 || mMm >= sqMm)
-            { SetStatus("Marker length must be > 0 and < square length."); return false; }
-
-            return true;
+            PlayerPrefs.SetString(PrefSaveDir, dir);
+            PlayerPrefs.Save();
+            SetStatus($"Saved:\n{path}");
+            Debug.Log($"[CharucoBoardPopup] Board saved to {path}");
         }
 
         private void LoadPrefs()
         {
-            if (_squaresXField       != null) _squaresXField.text       = PlayerPrefs.GetInt(PrefSquaresX, 5).ToString();
-            if (_squaresYField       != null) _squaresYField.text       = PlayerPrefs.GetInt(PrefSquaresY, 7).ToString();
-            if (_squareLengthMmField != null) _squareLengthMmField.text = PlayerPrefs.GetFloat(PrefSquareLengthMm, 30f).ToString("F1");
-            if (_markerLengthMmField != null) _markerLengthMmField.text = PlayerPrefs.GetFloat(PrefMarkerLengthMm, 15f).ToString("F1");
-            if (_saveDirField        != null) _saveDirField.text        = PlayerPrefs.GetString(PrefSaveDir, Application.persistentDataPath);
-        }
-
-        private void SavePrefs(int sqX, int sqY, float sqMm, float mMm, string dir)
-        {
-            PlayerPrefs.SetInt(PrefSquaresX, sqX);
-            PlayerPrefs.SetInt(PrefSquaresY, sqY);
-            PlayerPrefs.SetFloat(PrefSquareLengthMm, sqMm);
-            PlayerPrefs.SetFloat(PrefMarkerLengthMm, mMm);
-            PlayerPrefs.SetString(PrefSaveDir, dir);
-            PlayerPrefs.Save();
+            if (_saveDirField != null) _saveDirField.text = PlayerPrefs.GetString(PrefSaveDir, Application.persistentDataPath);
         }
 
         private void SetStatus(string msg)

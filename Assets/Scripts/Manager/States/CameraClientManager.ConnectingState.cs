@@ -17,7 +17,7 @@ namespace Thesis.Managers
                     return;
                 }
 
-                pub.OnPublishingStarted += OnPublishingStarted;
+                pub.OnReadyToPublish += OnReadyToPublish;
                 pub.OnDisconnected += OnDisconnected;
                 pub.OnConnectionFailed += OnFailed;
                 pub.BeginStreaming();
@@ -26,13 +26,13 @@ namespace Thesis.Managers
             public override void Exit()
             {
                 if (!LiveKitCameraPublisher.HasInstance) return;
-                LiveKitCameraPublisher.Instance.OnPublishingStarted -= OnPublishingStarted;
+                LiveKitCameraPublisher.Instance.OnReadyToPublish -= OnReadyToPublish;
                 LiveKitCameraPublisher.Instance.OnDisconnected -= OnDisconnected;
                 LiveKitCameraPublisher.Instance.OnConnectionFailed -= OnFailed;
             }
 
-            private void OnPublishingStarted() =>
-                _context.ChangeState(new StreamingState(_context), CameraState.Streaming);
+            private void OnReadyToPublish() =>
+                _context.ChangeState(new CalibratingState(_context), CameraState.Calibrating);
 
             private void OnDisconnected() =>
                 _context.ChangeState(new RegisteringState(_context), CameraState.Registering);

@@ -32,6 +32,7 @@ namespace Thesis.Managers
 
         public event Action OnConnected;
         public event Action OnDisconnected;
+        public event Action OnReadyToPublish;
         public event Action OnPublishingStarted;
         public event Action<string> OnConnectionFailed;
 
@@ -49,6 +50,13 @@ namespace Thesis.Managers
             StartCoroutine(StartStreamingRoutine());
         }
 
+        /// <summary>Call once OnReadyToPublish fires and calibration (if required)
+        /// is done, to actually start sending video.</summary>
+        public void PublishNow()
+        {
+            StartCoroutine(PublishCamera());
+        }
+
         private IEnumerator StartStreamingRoutine()
         {
             yield return StartCoroutine(OpenCamera());
@@ -57,7 +65,9 @@ namespace Thesis.Managers
             yield return StartCoroutine(Connect());
             if (_room == null) yield break; // Connect() nulls _room on failure; IsConnected is unreliable here because ConnectionState updates asynchronously via RoomEvent
 
-            yield return StartCoroutine(PublishCamera());
+            // Camera is open and the room is joined, but no video is sent yet —
+            // callers gate the actual PublishNow() call on calibration completing.
+            OnReadyToPublish?.Invoke();
         }
 
         #region Camera

@@ -14,6 +14,7 @@ namespace Thesis.UI.Screens
         [SerializeField] private TMP_InputField _cameraLabelField;
         [SerializeField] private Button _connectButton;
         [SerializeField] private Button _retryButton;
+        [SerializeField] private Button _recalibrateButton;
         [SerializeField] private TMP_Text _statusText;
 
         private static readonly Color _normalColor = new Color(0.85f, 0.85f, 0.85f, 1f);
@@ -30,6 +31,9 @@ namespace Thesis.UI.Screens
                 _retryButton.onClick.AddListener(OnRetryClicked);
                 _retryButton.gameObject.SetActive(false);
             }
+
+            if (_recalibrateButton != null)
+                _recalibrateButton.onClick.AddListener(OnRecalibrateClicked);
         }
 
         public override void Show(object data)
@@ -39,6 +43,8 @@ namespace Thesis.UI.Screens
             if (_retryButton != null) _retryButton.gameObject.SetActive(false);
             if (_connectButton != null) _connectButton.interactable = true;
             if (_cameraLabelField != null) _cameraLabelField.gameObject.SetActive(CameraClientManager.HasInstance);
+            if (_recalibrateButton != null)
+                _recalibrateButton.gameObject.SetActive(CameraClientManager.HasInstance && Thesis.AppConfig.CalibrationAcknowledged);
 
             if (ViewerTokenClient.HasInstance)
             {
@@ -128,6 +134,13 @@ namespace Thesis.UI.Screens
         }
 
         private void OnRetryClicked() => OnConnectClicked();
+
+        private void OnRecalibrateClicked()
+        {
+            Thesis.AppConfig.CalibrationAcknowledged = false;
+            if (_recalibrateButton != null) _recalibrateButton.gameObject.SetActive(false);
+            SetStatus("Calibration reset — next connect will run the tutorial again.");
+        }
 
         private void HandleTokenReceived()
         {
