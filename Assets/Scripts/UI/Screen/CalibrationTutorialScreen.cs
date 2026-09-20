@@ -32,6 +32,7 @@ namespace Thesis.UI.Screens
         [SerializeField] private AspectRatioFitter _aspectFitter;
         [SerializeField] private TMP_Text _instructionText;
         [SerializeField] private TMP_Text _progressText;
+        [SerializeField] private Image _progressBarFill;
 
         [Header("Calibrator")]
         [SerializeField] private CameraCalibrator _calibrator;
@@ -248,14 +249,20 @@ namespace Thesis.UI.Screens
 
         private void UpdateExtrinsicsProgressText()
         {
-            if (_progressText != null)
-                _progressText.text = $"{_stableFrameCount}/{StableFramesRequired} stable";
+            SetProgress((float)_stableFrameCount / StableFramesRequired);
         }
 
         private void UpdateProgressText()
         {
-            if (_progressText == null || _calibrator == null) return;
-            _progressText.text = $"{_calibrator.AccumulatedFrames}/{_calibrator.minFramesForCalibration} frames";
+            if (_calibrator == null) return;
+            SetProgress((float)_calibrator.AccumulatedFrames / _calibrator.minFramesForCalibration);
+        }
+
+        private void SetProgress(float fraction)
+        {
+            fraction = Mathf.Clamp01(fraction);
+            if (_progressBarFill != null) _progressBarFill.fillAmount = fraction;
+            if (_progressText != null) _progressText.text = $"{Mathf.RoundToInt(fraction * 100f)}%";
         }
 
         private void SetupLivePreview()
