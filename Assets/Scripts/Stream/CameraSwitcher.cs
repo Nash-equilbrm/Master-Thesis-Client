@@ -131,6 +131,7 @@ namespace Thesis.Stream
             bool dibrActive = false;
             float dibrFadeT = 0f;
             float t = 0f;
+            float firstFrameT = -1f; // when the incoming stream delivered its first frame
 
             while (t < _crossfadeDuration)
             {
@@ -138,7 +139,17 @@ namespace Thesis.Stream
                 float u = Mathf.Clamp01(t / _crossfadeDuration);
 
                 if (haveFrom && !dibrActive)
-                    SetAlpha(_transitionImage, u);
+                {
+                    if (_transitionPlayer.HasTexture)
+                    {
+                        if (firstFrameT < 0f) firstFrameT = t;
+                        // Fade from 0→1 over the remaining crossfade time so there
+                        // is never an alpha jump regardless of when the frame arrives.
+                        float remaining = Mathf.Max(_crossfadeDuration - firstFrameT, 0.2f);
+                        SetAlpha(_transitionImage, Mathf.Clamp01((t - firstFrameT) / remaining));
+                    }
+                    // else: no texture yet — keep alpha at 0, old camera stays fully visible
+                }
 
                 if (!haveResult && prepareTask != null && prepareTask.IsCompleted)
                 {
@@ -179,7 +190,9 @@ namespace Thesis.Stream
             }
 
             // Settle: plain single-camera view of toIdentity, DIBR overlay hidden.
-            SetAlpha(_transitionImage, 1f);
+            // If no frame arrived yet keep alpha at 0 until the texture lands —
+            // old camera stays visible rather than flashing white.
+            SetAlpha(_transitionImage, _transitionPlayer.HasTexture ? 1f : 0f);
             _dibrImage.gameObject.SetActive(false);
             SetAlpha(_dibrImage, 0f);
 
@@ -187,9 +200,26 @@ namespace Thesis.Stream
             (_streamPlayer, _transitionPlayer) = (_transitionPlayer, _streamPlayer);
             var streamImage = _streamPlayer.GetComponent<RawImage>();
             _transitionImage = _transitionPlayer.GetComponent<RawImage>();
-            SetAlpha(streamImage, 1f);
             SetAlpha(_transitionImage, 0f); // hide the retired display so it doesn't bleed through next switch
 
+            if (_streamPlayer.HasTexture)
+            {
+                SetAlpha(streamImage, 1f);
+                _activeSwitch = null;
+            }
+            else
+            {
+                // Frame hasn't arrived yet — hold alpha at 0 and reveal as soon as it lands.
+                SetAlpha(streamImage, 0f);
+                _activeSwitch = StartCoroutine(RevealWhenReady(streamImage));
+            }
+        }
+
+        private IEnumerator RevealWhenReady(RawImage image)
+        {
+            while (_streamPlayer != null && !_streamPlayer.HasTexture)
+                yield return null;
+            if (image != null) SetAlpha(image, 1f);
             _activeSwitch = null;
         }
 

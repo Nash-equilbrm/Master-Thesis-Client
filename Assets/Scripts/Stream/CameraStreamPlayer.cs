@@ -67,6 +67,8 @@ namespace Thesis.Stream
             _streamCoroutine = StartCoroutine(_videoStream.Update());
         }
 
+        public bool HasTexture => _display != null && _display.texture != null;
+
         private void OnTextureReceived(Texture tex)
         {
             _display.texture = tex;
