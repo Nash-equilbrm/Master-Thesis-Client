@@ -38,6 +38,14 @@ namespace Thesis.UI.Screens
 
         private const int CaptureEveryNFrames = 5;
 
+        // Extrinsics only completes once the estimated pose stops changing for this many
+        // consecutive frames — otherwise the first pose estimate right after intrinsics
+        // finishes (often still mid-motion from "move the board around") gets locked in
+        // as the scene's static camera/marker pose.
+        private const int StableFramesRequired = 15;
+        private const float PoseTranslationEpsilonM = 0.005f;
+        private const float PoseRotationEpsilon = 0.02f; // axis-angle magnitude, ~1.1 degrees
+
         public event Action OnCalibrationComplete;
 
         private Step _step;
@@ -45,6 +53,9 @@ namespace Thesis.UI.Screens
         private RenderTexture _scratchRT;
         private int _frameCounter;
         private bool _uploadInFlight;
+        private int _stableFrameCount;
+        private float[] _lastRvec;
+        private float[] _lastTvec;
 
         public override void Init()
         {
@@ -77,6 +88,7 @@ namespace Thesis.UI.Screens
 
         public override void Hide(Action onComplete = null)
         {
+            ResetExtrinsicsStability();
             if (CalibrationConfigClient.HasInstance)
                 CalibrationConfigClient.Instance.OnConfigReady -= OnConfigReady;
             UnsubscribeUpload();
@@ -172,10 +184,10 @@ namespace Thesis.UI.Screens
             }
             else if (step == Step.Extrinsics)
             {
+                ResetExtrinsicsStability();
                 if (_instructionText != null)
                     _instructionText.text = "Hold the board steady, fully visible, and stay still.";
-                if (_progressText != null)
-                    _progressText.text = "";
+                UpdateExtrinsicsProgressText();
             }
         }
 
@@ -197,8 +209,47 @@ namespace Thesis.UI.Screens
 
         private void TickExtrinsics()
         {
-            if (_calibrator.EstimatePoseFromTexture(_scratchRT))
+            if (!_calibrator.EstimatePoseFromTexture(_scratchRT))
+            {
+                ResetExtrinsicsStability();
+                UpdateExtrinsicsProgressText();
+                return;
+            }
+
+            var rv = _calibrator.Extrinsics.rvec;
+            var tv = _calibrator.Extrinsics.tvec;
+
+            _stableFrameCount = _lastRvec != null && PoseWithinEpsilon(_lastRvec, _lastTvec, rv, tv)
+                ? _stableFrameCount + 1
+                : 1;
+            _lastRvec = rv;
+            _lastTvec = tv;
+            UpdateExtrinsicsProgressText();
+
+            if (_stableFrameCount >= StableFramesRequired)
                 CompleteCalibration();
+        }
+
+        private static bool PoseWithinEpsilon(float[] rvA, float[] tvA, float[] rvB, float[] tvB)
+        {
+            float tDist = Vector3.Distance(new Vector3(tvA[0], tvA[1], tvA[2]), new Vector3(tvB[0], tvB[1], tvB[2]));
+            if (tDist > PoseTranslationEpsilonM) return false;
+
+            float rDist = Vector3.Distance(new Vector3(rvA[0], rvA[1], rvA[2]), new Vector3(rvB[0], rvB[1], rvB[2]));
+            return rDist <= PoseRotationEpsilon;
+        }
+
+        private void ResetExtrinsicsStability()
+        {
+            _stableFrameCount = 0;
+            _lastRvec = null;
+            _lastTvec = null;
+        }
+
+        private void UpdateExtrinsicsProgressText()
+        {
+            if (_progressText != null)
+                _progressText.text = $"{_stableFrameCount}/{StableFramesRequired} stable";
         }
 
         private void UpdateProgressText()
