@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Reconstructs Assets/StreamingAssets/{FFmpeg,MediaMTX,DibrBridge,OpenDIBR} —
     the ~467MB of third-party/build binaries the live DIBR camera-switch
@@ -41,7 +41,7 @@ function Find-WinGetBinary([string]$PackageId, [string]$FileName) {
     winget list --id $PackageId -e | Out-Null
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Installing $PackageId via winget..."
-        winget install --id $PackageId -e --accept-package-agreements --accept-source-agreements
+        winget install --id $PackageId -e --accept-package-agreements --accept-source-agreements | Out-Null
     }
 
     $packagesDir = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Packages'
