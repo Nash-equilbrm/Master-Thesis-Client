@@ -117,3 +117,14 @@ InitTestScene*.unity*
 # Third-party asset store packages (imported locally, not committed)
 /[Aa]ssets/OpenCVForUnity/
 /[Aa]ssets/OpenCVForUnity.meta
+
+# DIBR camera-switch bundled binaries (rebuilt via Tools/BuildStreamingAssets.ps1,
+# not committed — see Master-Thesis-Reports/action_log_Sep_20th_dibr_camera_switch.md)
+/[Aa]ssets/StreamingAssets/DibrBridge/
+/[Aa]ssets/StreamingAssets/DibrBridge.meta
+/[Aa]ssets/StreamingAssets/FFmpeg/
+/[Aa]ssets/StreamingAssets/FFmpeg.meta
+/[Aa]ssets/StreamingAssets/MediaMTX/
+/[Aa]ssets/StreamingAssets/MediaMTX.meta
+/[Aa]ssets/StreamingAssets/OpenDIBR/
+/[Aa]ssets/StreamingAssets/OpenDIBR.meta
