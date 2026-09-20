@@ -110,6 +110,11 @@ namespace Thesis.Stream
         {
             EnsureTransitionLayers();
 
+            // _transitionPlayer must render above _streamPlayer for the fade-in to be visible.
+            // After each swap the sibling order inverts, so re-establish it every switch.
+            _transitionPlayer.transform.SetAsLastSibling();
+            _dibrImage.transform.SetAsLastSibling(); // keep DIBR overlay on top of both
+
             bool haveFrom = fromIdentity != null;
             _dibrImage.gameObject.SetActive(false);
             SetAlpha(_dibrImage, 0f);
@@ -183,6 +188,7 @@ namespace Thesis.Stream
             var streamImage = _streamPlayer.GetComponent<RawImage>();
             _transitionImage = _transitionPlayer.GetComponent<RawImage>();
             SetAlpha(streamImage, 1f);
+            SetAlpha(_transitionImage, 0f); // hide the retired display so it doesn't bleed through next switch
 
             _activeSwitch = null;
         }

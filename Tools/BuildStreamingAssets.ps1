@@ -122,9 +122,9 @@ function Step-DibrBridge {
 
 function Step-OpenDIBR {
     $dest = Join-Path $StreamingAssets 'OpenDIBR'
-    $sourceRepo = Join-Path $WorkspaceRoot 'OpenDIBR'
+    $sourceRepo = Join-Path $WorkspaceRoot 'open-dibr'
     if (-not (Test-Path $sourceRepo)) {
-        Write-Warning "[OpenDIBR] sibling repo not found at $sourceRepo — skipping. Clone OpenDIBR next to this repo first."
+        Write-Warning "[OpenDIBR] sibling repo not found at $sourceRepo — skipping. Clone open-dibr next to this repo first."
         return
     }
     if ((Test-Path (Join-Path $dest 'RealtimeDIBR.exe')) -and -not $Force) {
@@ -133,6 +133,8 @@ function Step-OpenDIBR {
     }
 
     $candidates = @(
+        (Join-Path $sourceRepo 'bin\Release'),
+        (Join-Path $sourceRepo 'bin\Debug'),
         (Join-Path $sourceRepo 'out\build\x64-Release\Release'),
         (Join-Path $sourceRepo 'out\build\x64-Debug\Debug')
     )

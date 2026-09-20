@@ -218,14 +218,12 @@ namespace Thesis.Dibr
             }
             if (calib == null) return PrepareResult.NotCalibrated();
 
-            if (calib.cam1.intrinsics.imageWidth != _outputWidth || calib.cam1.intrinsics.imageHeight != _outputHeight ||
-                calib.cam2.intrinsics.imageWidth != _outputWidth || calib.cam2.intrinsics.imageHeight != _outputHeight)
-            {
-                return PrepareResult.Failed(
-                    $"Camera resolution doesn't match OpenDIBR's fixed startup resolution " +
-                    $"({_outputWidth}x{_outputHeight}) — cam1: {calib.cam1.intrinsics.imageWidth}x{calib.cam1.intrinsics.imageHeight}, " +
-                    $"cam2: {calib.cam2.intrinsics.imageWidth}x{calib.cam2.intrinsics.imageHeight}");
-            }
+            // Intrinsics are scaled to _outputWidth×_outputHeight in EnsureOpenDibrCameraAsync
+            // if the calibration resolution differs — warn only when aspect ratios are very
+            // different (> 5%), since that indicates a crop/pad mismatch rather than a simple
+            // scale difference and may produce visible distortion.
+            WarnIfAspectMismatch(calib.cam1.intrinsics, "cam1");
+            WarnIfAspectMismatch(calib.cam2.intrinsics, "cam2");
 
             try
             {
@@ -294,6 +292,38 @@ namespace Thesis.Dibr
             return urls;
         }
 
+        private void WarnIfAspectMismatch(IntrinsicsData intrinsics, string label)
+        {
+            if (intrinsics.imageWidth == 0 || intrinsics.imageHeight == 0) return;
+            float calibAspect = (float)intrinsics.imageWidth / intrinsics.imageHeight;
+            float outputAspect = (float)_outputWidth / _outputHeight;
+            if (Mathf.Abs(calibAspect - outputAspect) / outputAspect > 0.05f)
+                Debug.LogWarning($"[OpenDibrSessionManager] {label} calibration aspect {calibAspect:F3} " +
+                                 $"differs from output {outputAspect:F3} by >5% — DIBR may show distortion.");
+        }
+
+        // Scales focal length and principal point from the calibration resolution to
+        // the fixed OpenDIBR output resolution. Standard linear relationship: when an
+        // image is uniformly scaled, all pixel-coordinate quantities (f, cx, cy) scale
+        // by the same factor.
+        private IntrinsicsData ScaleIntrinsics(IntrinsicsData src)
+        {
+            if (src.imageWidth == _outputWidth && src.imageHeight == _outputHeight) return src;
+            float sx = (float)_outputWidth / src.imageWidth;
+            float sy = (float)_outputHeight / src.imageHeight;
+            return new IntrinsicsData
+            {
+                fx = src.fx * sx,
+                fy = src.fy * sy,
+                cx = src.cx * sx,
+                cy = src.cy * sy,
+                distCoeffs = src.distCoeffs,
+                imageWidth = _outputWidth,
+                imageHeight = _outputHeight,
+                reprojectionError = src.reprojectionError,
+            };
+        }
+
         private async Task EnsureOpenDibrCameraAsync(string identity, DibrBridgeControlChannel.CameraUrls urls,
             IntrinsicsData intrinsics, ExtrinsicsData extrinsics, float depthMin, float depthMax)
         {
@@ -312,6 +342,7 @@ namespace Thesis.Dibr
             // virtual/output camera the pose channel (Item 2) moves during a
             // transition. Two distinct concepts: every input camera has one
             // static pose here; only the output viewpoint is driven live.
+            intrinsics = ScaleIntrinsics(intrinsics);
             OpenDibrPoseMath.ExtrinsicsToBoardPose(extrinsics, out var pos, out var rot);
             Vector3 rotationRodrigues = OpenDibrPoseMath.QuaternionToRodrigues(rot);
 
