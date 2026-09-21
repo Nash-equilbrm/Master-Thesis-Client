@@ -18,21 +18,13 @@ namespace Thesis.Stream
         [Header("Transition")]
         [SerializeField] private float _crossfadeDuration = 1.5f;
         [SerializeField] private float _dibrFadeInDuration = 0.3f;
+        [SerializeField] private float _dibrPrepareWaitMax = 8f;  // max seconds to wait for PrepareResult before giving up
+        [SerializeField] private float _dibrFrameWaitMax = 3f;    // extra wait after prepare succeeds but no frame yet
+        [SerializeField] private float _dibrStartupDelay = 1.5f;  // delay after prepare succeeds before showing overlay (let OpenDIBR fill pipeline)
 
         private readonly Dictionary<string, Button> _buttons = new();
         private string _activeCamera;
 
-        // Second live track + a synthetic-view overlay, created at runtime as
-        // siblings of _streamPlayer's RawImage (matching this class's
-        // existing convention of building UI programmatically rather than
-        // via prefab authoring — see CreateButton below). See
-        // Master-Thesis-Reports/handoff_spec_Sep_20th_opendibr_live_control_and_export.md
-        // and the plan (tranquil-seeking-clarke.md, Phase D) for the full
-        // switch sequence this implements: fallback-first 2D crossfade,
-        // swapped for the OpenDIBR synthetic view if it becomes ready in
-        // time, settling on a plain single-camera view either way.
-        private CameraStreamPlayer _transitionPlayer;
-        private RawImage _transitionImage;
         private RawImage _dibrImage;
         private Coroutine _activeSwitch;
 
@@ -45,6 +37,9 @@ namespace Thesis.Stream
             LiveKitManager.Instance.OnVideoTrackRemoved += OnVideoTrackRemoved;
             LiveKitManager.Instance.OnParticipantNameChanged += OnParticipantNameChanged;
 
+            if (OpenDibrSessionManager.HasInstance)
+                OpenDibrSessionManager.Instance.OnSessionStarted += TryProactiveWarmUp;
+
             if (LiveKitManager.Instance.IsConnected)
                 OnConnected(LiveKitManager.Instance.Room);
         }
@@ -56,6 +51,9 @@ namespace Thesis.Stream
             LiveKitManager.Instance.OnVideoTrackAvailable -= OnVideoTrackAvailable;
             LiveKitManager.Instance.OnVideoTrackRemoved -= OnVideoTrackRemoved;
             LiveKitManager.Instance.OnParticipantNameChanged -= OnParticipantNameChanged;
+
+            if (OpenDibrSessionManager.HasInstance)
+                OpenDibrSessionManager.Instance.OnSessionStarted -= TryProactiveWarmUp;
         }
 
         private void OnConnected(LiveKit.Room room)
@@ -69,6 +67,27 @@ namespace Thesis.Stream
             if (!_buttons.ContainsKey(identity))
                 CreateButton(identity);
             SetButtonInteractable(identity, true);
+            TryProactiveWarmUp();
+        }
+
+        private void TryProactiveWarmUp()
+        {
+            if (!DibrCapability.IsAvailable || !OpenDibrSessionManager.HasInstance) return;
+            if (!OpenDibrSessionManager.Instance.IsSessionStarted) return;
+
+            var ids = new System.Collections.Generic.List<string>(_buttons.Keys);
+            if (ids.Count < 2) return;
+
+            // Kick off a background prepare for every known pair so OpenDIBR has
+            // cameras added before the user clicks. Fire-and-forget — failures are
+            // logged inside PreparePairAsync and leave the session usable.
+            for (int i = 0; i < ids.Count; i++)
+                for (int j = i + 1; j < ids.Count; j++)
+                {
+                    var a = ids[i]; var b = ids[j];
+                    Debug.Log($"[CameraSwitcher] Proactive warm-up: {a}↔{b}");
+                    _ = OpenDibrSessionManager.Instance.PreparePairAsync(a, b, AppConfig.ServerUrl);
+                }
         }
 
         private void OnVideoTrackRemoved(string identity)
@@ -79,7 +98,6 @@ namespace Thesis.Stream
             {
                 if (_activeSwitch != null) { StopCoroutine(_activeSwitch); _activeSwitch = null; }
                 _streamPlayer?.Unsubscribe();
-                _transitionPlayer?.Unsubscribe();
                 _activeCamera = null;
             }
         }
@@ -108,64 +126,63 @@ namespace Thesis.Stream
 
         private IEnumerator RunSwitch(string fromIdentity, string toIdentity, LiveKit.RemoteTrackPublication toPub)
         {
-            EnsureTransitionLayers();
+            Debug.Log($"[CameraSwitcher] Switch {fromIdentity ?? "none"} → {toIdentity} | " +
+                      $"DibrAvailable={DibrCapability.IsAvailable} " +
+                      $"SessionManagerPresent={OpenDibrSessionManager.HasInstance} " +
+                      $"SessionStarted={( OpenDibrSessionManager.HasInstance ? OpenDibrSessionManager.Instance.IsSessionStarted.ToString() : "n/a" )}");
 
-            // _transitionPlayer must render above _streamPlayer for the fade-in to be visible.
-            // After each swap the sibling order inverts, so re-establish it every switch.
-            _transitionPlayer.transform.SetAsLastSibling();
-            _dibrImage.transform.SetAsLastSibling(); // keep DIBR overlay on top of both
-
-            bool haveFrom = fromIdentity != null;
+            EnsureDibrLayer();
             _dibrImage.gameObject.SetActive(false);
             SetAlpha(_dibrImage, 0f);
 
-            _transitionPlayer.SubscribeTo(toPub);
-            SetAlpha(_transitionImage, haveFrom ? 0f : 1f);
-
+            bool haveFrom = fromIdentity != null;
             Task<PrepareResult> prepareTask = null;
             if (haveFrom && DibrCapability.IsAvailable && OpenDibrSessionManager.HasInstance)
-                prepareTask = OpenDibrSessionManager.Instance.PreparePairAsync(fromIdentity, toIdentity, Thesis.AppConfig.ServerUrl);
+            {
+                Debug.Log($"[CameraSwitcher] Starting PreparePairAsync for {fromIdentity}→{toIdentity}");
+                prepareTask = OpenDibrSessionManager.Instance.PreparePairAsync(fromIdentity, toIdentity, AppConfig.ServerUrl);
+            }
+            else
+            {
+                Debug.Log($"[CameraSwitcher] Skipping DIBR — haveFrom={haveFrom}, DibrAvailable={DibrCapability.IsAvailable}, HasInstance={OpenDibrSessionManager.HasInstance}");
+            }
 
             PrepareResult prepareResult = default;
-            bool haveResult = false;
             bool dibrActive = false;
-            float dibrFadeT = 0f;
+            bool feedSwitched = false;
+            float fadeInT = 0f;
+            float fadeOutT = 0f;
             float t = 0f;
-            float firstFrameT = -1f; // when the incoming stream delivered its first frame
+            float dibrReadyWaitT = 0f;   // time waiting for first frame after prepare succeeded
+            float dibrStartupWaitT = 0f; // time waiting for pipeline to fill after prepare succeeded
 
-            while (t < _crossfadeDuration)
+            // Loop exits when:
+            //   - prepare timed out or failed (instant cut), OR
+            //   - feed switched AND overlay fade-out done, OR
+            //   - DIBR active but no frame within _dibrFrameWaitMax (instant cut)
+            while ((prepareTask != null && !prepareTask.IsCompleted && t < _dibrPrepareWaitMax)
+                   || (prepareTask != null && prepareTask.IsCompleted && !dibrActive)
+                   || (dibrActive && !feedSwitched && dibrReadyWaitT < _dibrFrameWaitMax)
+                   || (feedSwitched && fadeOutT < _dibrFadeInDuration))
             {
                 t += Time.deltaTime;
                 float u = Mathf.Clamp01(t / _crossfadeDuration);
 
-                if (haveFrom && !dibrActive)
+                if (!dibrActive && prepareTask != null && prepareTask.IsCompleted)
                 {
-                    if (_transitionPlayer.HasTexture)
-                    {
-                        if (firstFrameT < 0f) firstFrameT = t;
-                        // Fade from 0→1 over the remaining crossfade time so there
-                        // is never an alpha jump regardless of when the frame arrives.
-                        float remaining = Mathf.Max(_crossfadeDuration - firstFrameT, 0.2f);
-                        SetAlpha(_transitionImage, Mathf.Clamp01((t - firstFrameT) / remaining));
-                    }
-                    // else: no texture yet — keep alpha at 0, old camera stays fully visible
-                }
-
-                if (!haveResult && prepareTask != null && prepareTask.IsCompleted)
-                {
-                    haveResult = true;
                     prepareResult = prepareTask.Status == TaskStatus.RanToCompletion
                         ? prepareTask.Result
                         : PrepareResult.Failed(prepareTask.Exception?.InnerException?.Message ?? "unknown error");
 
                     if (prepareResult.Success)
                     {
+                        Debug.Log($"[CameraSwitcher] DIBR ready for {fromIdentity}→{toIdentity} at {t:F2}s — waiting {_dibrStartupDelay}s for pipeline");
                         dibrActive = true;
-                        _dibrImage.gameObject.SetActive(true);
                     }
                     else
                     {
-                        Debug.Log($"[CameraSwitcher] Falling back to plain crossfade for {fromIdentity}->{toIdentity}: {prepareResult.Reason}");
+                        Debug.Log($"[CameraSwitcher] DIBR unavailable for {fromIdentity}→{toIdentity}: {prepareResult.Reason}");
+                        prepareTask = null;
                     }
                 }
 
@@ -174,65 +191,66 @@ namespace Thesis.Stream
                     OpenDibrPoseMath.Lerp(prepareResult.ExtrinsicsA, prepareResult.ExtrinsicsB, u, out var pos, out var rot);
                     OpenDibrSessionManager.Instance.StreamPose(pos, rot);
 
-                    var dibrTex = OpenDibrSessionManager.Instance.FrameReceiver.Texture;
-                    if (dibrTex != null) _dibrImage.texture = dibrTex;
+                    // Hold off showing the overlay until the startup delay has passed —
+                    // OpenDIBR outputs green frames for ~1s after set_active_pair while
+                    // its pipeline fills with real RTSP data.
+                    if (dibrStartupWaitT < _dibrStartupDelay)
+                    {
+                        dibrStartupWaitT += Time.deltaTime;
+                    }
+                    else
+                    {
+                        if (!_dibrImage.gameObject.activeSelf)
+                            _dibrImage.gameObject.SetActive(true);
 
-                    dibrFadeT = Mathf.Min(dibrFadeT + Time.deltaTime, _dibrFadeInDuration);
-                    float fadeIn = _dibrFadeInDuration > 0f ? dibrFadeT / _dibrFadeInDuration : 1f;
-                    SetAlpha(_dibrImage, fadeIn);
-                    // Never let the flat crossfade dip below where a plain,
-                    // non-DIBR switch would already be — DIBR only adds on
-                    // top, never reveals a flash of the old camera under it.
-                    SetAlpha(_transitionImage, haveFrom ? Mathf.Max(1f - fadeIn, u) : (1f - fadeIn));
+                        var dibrTex = OpenDibrSessionManager.Instance.FrameReceiver.Texture;
+                        if (dibrTex != null) _dibrImage.texture = dibrTex;
+
+                        if (!feedSwitched)
+                        {
+                            if (_dibrImage.texture != null)
+                                fadeInT = Mathf.Min(fadeInT + Time.deltaTime, _dibrFadeInDuration);
+                            else
+                                dibrReadyWaitT += Time.deltaTime;
+
+                            float alpha = _dibrFadeInDuration > 0f ? fadeInT / _dibrFadeInDuration : 1f;
+                            SetAlpha(_dibrImage, alpha);
+
+                            if (alpha >= 1f)
+                            {
+                                Debug.Log($"[CameraSwitcher] DIBR opaque — swapping feed to {toIdentity}");
+                                _streamPlayer.SubscribeTo(toPub);
+                                feedSwitched = true;
+                            }
+                        }
+                        else
+                        {
+                            fadeOutT += Time.deltaTime;
+                            float alpha = _dibrFadeInDuration > 0f ? 1f - fadeOutT / _dibrFadeInDuration : 0f;
+                            SetAlpha(_dibrImage, Mathf.Max(0f, alpha));
+                        }
+                    }
                 }
 
                 yield return null;
             }
 
-            // Settle: plain single-camera view of toIdentity, DIBR overlay hidden.
-            // If no frame arrived yet keep alpha at 0 until the texture lands —
-            // old camera stays visible rather than flashing white.
-            SetAlpha(_transitionImage, _transitionPlayer.HasTexture ? 1f : 0f);
+            // DIBR timed out or never activated — instant cut to camera B.
+            if (!feedSwitched)
+            {
+                Debug.Log($"[CameraSwitcher] DIBR deadline passed without activating — instant cut to {toIdentity}");
+                _streamPlayer.SubscribeTo(toPub);
+            }
+
             _dibrImage.gameObject.SetActive(false);
             SetAlpha(_dibrImage, 0f);
-
-            if (haveFrom) _streamPlayer.Unsubscribe();
-            (_streamPlayer, _transitionPlayer) = (_transitionPlayer, _streamPlayer);
-            var streamImage = _streamPlayer.GetComponent<RawImage>();
-            _transitionImage = _transitionPlayer.GetComponent<RawImage>();
-            SetAlpha(_transitionImage, 0f); // hide the retired display so it doesn't bleed through next switch
-
-            if (_streamPlayer.HasTexture)
-            {
-                SetAlpha(streamImage, 1f);
-                _activeSwitch = null;
-            }
-            else
-            {
-                // Frame hasn't arrived yet — hold alpha at 0 and reveal as soon as it lands.
-                SetAlpha(streamImage, 0f);
-                _activeSwitch = StartCoroutine(RevealWhenReady(streamImage));
-            }
-        }
-
-        private IEnumerator RevealWhenReady(RawImage image)
-        {
-            while (_streamPlayer != null && !_streamPlayer.HasTexture)
-                yield return null;
-            if (image != null) SetAlpha(image, 1f);
             _activeSwitch = null;
         }
 
-        private void EnsureTransitionLayers()
+        private void EnsureDibrLayer()
         {
-            if (_transitionPlayer != null) return;
-
-            var streamImage = _streamPlayer.GetComponent<RawImage>();
-            var streamRect = streamImage.rectTransform;
-
-            _transitionImage = CreateOverlayRawImage("TransitionDisplay", streamRect);
-            _transitionPlayer = _transitionImage.gameObject.AddComponent<CameraStreamPlayer>();
-
+            if (_dibrImage != null) return;
+            var streamRect = _streamPlayer.GetComponent<RawImage>().rectTransform;
             _dibrImage = CreateOverlayRawImage("DibrSyntheticView", streamRect);
             _dibrImage.gameObject.SetActive(false);
         }
@@ -241,7 +259,7 @@ namespace Thesis.Stream
         {
             var go = new GameObject(name, typeof(RectTransform), typeof(RawImage));
             go.transform.SetParent(matchRect.parent, false);
-            go.transform.SetAsLastSibling(); // render on top of _streamPlayer's image
+            go.transform.SetAsLastSibling();
 
             var rt = (RectTransform)go.transform;
             rt.anchorMin = matchRect.anchorMin;
@@ -261,7 +279,7 @@ namespace Thesis.Stream
             image.color = c;
         }
 
-        // ── Buttons (unchanged) ─────────────────────────────────────────
+        // ── Buttons ──────────────────────────────────────────────────────
 
         private void CreateButton(string identity)
         {

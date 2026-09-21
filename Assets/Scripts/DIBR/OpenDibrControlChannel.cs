@@ -71,9 +71,17 @@ namespace Thesis.Dibr
             public string error;
         }
 
+        // 20s default: OpenDIBR's add_camera connects to the RTSP stream and
+        // warms up its decoder before replying (log shows several seconds of
+        // "not enough frames to estimate rate" / "decoding for stream 0
+        // failed" before "ready (slot N)"). This is worse for a remote camera
+        // whose frames travel laptop → LiveKit → bridge → RTSP → OpenDIBR, so
+        // the old 5s timeout fired before OpenDIBR replied even though the add
+        // eventually succeeded — wedging the pair (see the idempotent handling
+        // in OpenDibrSessionManager.EnsureOpenDibrCameraAsync).
         public async Task AddCameraAsync(string name, string nameColor, string nameDepth,
             float[] focal, float[] principlePoint, float[] position, float[] rotationRodrigues,
-            int[] resolution, float[] depthRange, int bitDepthColor, int bitDepthDepth, int timeoutMs = 5000)
+            int[] resolution, float[] depthRange, int bitDepthColor, int bitDepthDepth, int timeoutMs = 20000)
         {
             var req = new AddCameraRequest
             {
@@ -86,10 +94,10 @@ namespace Thesis.Dibr
             await SendAndCheck(JsonUtility.ToJson(req), timeoutMs);
         }
 
-        public async Task RemoveCameraAsync(string name, int timeoutMs = 3000) =>
+        public async Task RemoveCameraAsync(string name, int timeoutMs = 8000) =>
             await SendAndCheck(JsonUtility.ToJson(new RemoveCameraRequest { name = name }), timeoutMs);
 
-        public async Task SetActivePairAsync(string camA, string camB, int timeoutMs = 3000) =>
+        public async Task SetActivePairAsync(string camA, string camB, int timeoutMs = 8000) =>
             await SendAndCheck(JsonUtility.ToJson(new SetActivePairRequest { camA = camA, camB = camB }), timeoutMs);
 
         private async Task SendAndCheck(string jsonLine, int timeoutMs)

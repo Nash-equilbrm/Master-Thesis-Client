@@ -63,6 +63,7 @@ namespace Thesis.Dibr
 
         public OpenDibrFrameReceiver FrameReceiver { get; private set; }
         public bool IsSessionStarted { get; private set; }
+        public event System.Action OnSessionStarted;
 
         private OpenDibrProcessLauncher _launcher;
         private OpenDibrControlChannel _openDibrControl;
@@ -139,11 +140,13 @@ namespace Thesis.Dibr
             // listening before the bridge process even launches.
             string mediaMtxPath = System.IO.Path.Combine(Application.streamingAssetsPath, "MediaMTX", "mediamtx.exe");
             string mediaMtxConfig = System.IO.Path.Combine(Application.streamingAssetsPath, "MediaMTX", "mediamtx.yml");
+            Debug.Log($"[OpenDibrSessionManager] Starting mediamtx: {mediaMtxPath}");
             if (!_launcher.StartMediaMtx(mediaMtxPath, mediaMtxConfig))
             {
                 Debug.LogWarning("[OpenDibrSessionManager] mediamtx failed to start — synthetic view unavailable this session.");
                 return;
             }
+            Debug.Log("[OpenDibrSessionManager] mediamtx started. Waiting 1s for it to bind...");
             await Task.Delay(1000); // brief startup time before the bridge tries to push into it
 
             string bridgePath = string.IsNullOrEmpty(_bridgeExePathOverride)
@@ -151,18 +154,26 @@ namespace Thesis.Dibr
                 : _bridgeExePathOverride;
             string ffmpegDir = System.IO.Path.Combine(Application.streamingAssetsPath, "FFmpeg");
             string bridgeArgs = $"--server-url \"{Thesis.AppConfig.ServerUrl}\" --rtsp-base \"{_rtspBase}\" " +
-                                 $"--width {_outputWidth} --height {_outputHeight}";
-            if (!_launcher.StartBridge(bridgePath, bridgeArgs, ffmpegDir))
+                                 $"--width {_outputWidth} --height {_outputHeight} --room-code \"{Thesis.AppConfig.RoomCode}\"";
+            Debug.Log($"[OpenDibrSessionManager] Starting bridge: {bridgePath} {bridgeArgs}");
+            if (!_launcher.StartBridge(bridgePath, bridgeArgs, ffmpegDir, captureOutput: true))
             {
                 Debug.LogWarning("[OpenDibrSessionManager] Bridge failed to start — synthetic view unavailable this session.");
                 return;
             }
+            Debug.Log("[OpenDibrSessionManager] Bridge started. Waiting 3s for placeholder RTSP stream...");
 
             // Heuristic fixed delay for the bridge's placeholder stream to
             // actually become decodable (ffmpeg encoder init + RTSP
             // registration) — replace with a real readiness signal from the
             // bridge if this proves flaky once actually run.
             await Task.Delay(3000);
+            if (!_launcher.IsBridgeRunning)
+            {
+                Debug.LogWarning("[OpenDibrSessionManager] Bridge exited during startup — synthetic view unavailable this session.");
+                return;
+            }
+            Debug.Log("[OpenDibrSessionManager] Bridge still running after 3s.");
 
             string placeholderColorUrl = $"{_rtspBase}/{PlaceholderName}_color";
             string placeholderDepthUrl = $"{_rtspBase}/{PlaceholderName}_depth";
@@ -181,18 +192,22 @@ namespace Thesis.Dibr
             // findings) — give its own startup validation a moment, then
             // confirm it's actually still running before trusting the
             // control channels below will ever connect.
+            Debug.Log($"[OpenDibrSessionManager] OpenDIBR launched. Waiting 2s for startup validation...");
+            Debug.Log($"[OpenDibrSessionManager] Startup JSON ({startupJsonPath}):\n{startupJson}");
             await Task.Delay(2000);
             if (!_launcher.IsOpenDibrRunning)
             {
                 Debug.LogWarning("[OpenDibrSessionManager] OpenDIBR exited immediately after launch — check its startup JSON/placeholder stream.");
                 return;
             }
+            Debug.Log("[OpenDibrSessionManager] OpenDIBR is running. Opening control channels...");
 
             _openDibrControl = new OpenDibrControlChannel();
             _bridgeControl = new DibrBridgeControlChannel();
             _poseChannel = new OpenDibrPoseChannel();
 
             IsSessionStarted = true;
+            OnSessionStarted?.Invoke();
         }
 
         // Fetches calibration, ensures both cameras are added on both sides
@@ -204,6 +219,9 @@ namespace Thesis.Dibr
         // pair."
         public async Task<PrepareResult> PreparePairAsync(string camA, string camB, string serverUrl)
         {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            Debug.Log($"[PreparePair] {camA}→{camB} start");
+
             await EnsureSessionStartedAsync();
             if (!IsSessionStarted) return PrepareResult.Failed("DIBR session not available on this machine.");
 
@@ -216,46 +234,33 @@ namespace Thesis.Dibr
             {
                 return PrepareResult.Failed($"Calibration fetch error: {e.Message}");
             }
+            Debug.Log($"[PreparePair] calibration fetched at {sw.ElapsedMilliseconds}ms — found={calib != null}");
             if (calib == null) return PrepareResult.NotCalibrated();
 
-            // Intrinsics are scaled to _outputWidth×_outputHeight in EnsureOpenDibrCameraAsync
-            // if the calibration resolution differs — warn only when aspect ratios are very
-            // different (> 5%), since that indicates a crop/pad mismatch rather than a simple
-            // scale difference and may produce visible distortion.
             WarnIfAspectMismatch(calib.cam1.intrinsics, "cam1");
             WarnIfAspectMismatch(calib.cam2.intrinsics, "cam2");
 
             try
             {
                 var urlsA = await EnsureBridgeCameraAsync(camA);
+                Debug.Log($"[PreparePair] bridge camA done at {sw.ElapsedMilliseconds}ms");
                 var urlsB = await EnsureBridgeCameraAsync(camB);
+                Debug.Log($"[PreparePair] bridge camB done at {sw.ElapsedMilliseconds}ms");
 
-                // Bridge pairing MUST happen before EnsureOpenDibrCameraAsync
-                // below — OpenDIBR's add_camera needs a concrete Depth_range
-                // up front (confirmed by opendibr-c3: it's a per-camera field
-                // on add_camera itself, not on set_active_pair), but depth
-                // range is only knowable once the bridge actually computes
-                // stereo depth for a specific pairing. Always re-triggered on
-                // the bridge even for two already-added cameras — depth
-                // output depends on the current partner.
                 var depthRange = await _bridgeControl.SetActivePairAsync(camA, camB);
+                Debug.Log($"[PreparePair] bridge pair set at {sw.ElapsedMilliseconds}ms");
 
-                // NOTE: a camera's Depth_range is captured here only the
-                // FIRST time it's added to OpenDIBR (EnsureOpenDibrCameraAsync
-                // is a no-op for an already-added identity) and held static
-                // for the rest of the session, even though the bridge
-                // recomputes a fresh, more accurate range on every
-                // set_active_pair call. Accepted simplification — see
-                // OpenDibrControlChannel.cs's AddCameraRequest.Depth_range
-                // comment. Revisit only if this visibly degrades depth
-                // quality for cameras re-paired with very different partners.
                 await EnsureOpenDibrCameraAsync(camA, urlsA, calib.cam1.intrinsics, calib.cam1.extrinsics, depthRange.MinA, depthRange.MaxA);
+                Debug.Log($"[PreparePair] OpenDIBR camA done at {sw.ElapsedMilliseconds}ms");
                 await EnsureOpenDibrCameraAsync(camB, urlsB, calib.cam2.intrinsics, calib.cam2.extrinsics, depthRange.MinB, depthRange.MaxB);
+                Debug.Log($"[PreparePair] OpenDIBR camB done at {sw.ElapsedMilliseconds}ms");
 
                 await _openDibrControl.SetActivePairAsync(camA, camB);
+                Debug.Log($"[PreparePair] OpenDIBR pair set at {sw.ElapsedMilliseconds}ms — ready");
             }
             catch (Exception e)
             {
+                Debug.LogWarning($"[PreparePair] failed at {sw.ElapsedMilliseconds}ms: {e.Message}");
                 return PrepareResult.Failed($"DIBR pipeline setup failed: {e.Message}");
             }
 
@@ -354,15 +359,29 @@ namespace Thesis.Dibr
             const int bitDepthColor = 8;
             const int bitDepthDepth = 8;
 
-            await _openDibrControl.AddCameraAsync(
-                identity, urls.ColorUrl, urls.DepthUrl,
-                focal: new[] { intrinsics.fx, intrinsics.fy },
-                principlePoint: new[] { intrinsics.cx, intrinsics.cy },
-                position: new[] { pos.x, pos.y, pos.z },
-                rotationRodrigues: new[] { rotationRodrigues.x, rotationRodrigues.y, rotationRodrigues.z },
-                resolution: new[] { _outputWidth, _outputHeight },
-                depthRange: new[] { depthMin, depthMax },
-                bitDepthColor: bitDepthColor, bitDepthDepth: bitDepthDepth);
+            try
+            {
+                await _openDibrControl.AddCameraAsync(
+                    identity, urls.ColorUrl, urls.DepthUrl,
+                    focal: new[] { intrinsics.fx, intrinsics.fy },
+                    principlePoint: new[] { intrinsics.cx, intrinsics.cy },
+                    position: new[] { pos.x, pos.y, pos.z },
+                    rotationRodrigues: new[] { rotationRodrigues.x, rotationRodrigues.y, rotationRodrigues.z },
+                    resolution: new[] { _outputWidth, _outputHeight },
+                    depthRange: new[] { depthMin, depthMax },
+                    bitDepthColor: bitDepthColor, bitDepthDepth: bitDepthDepth);
+            }
+            catch (InvalidOperationException e) when (e.Message.Contains("already active"))
+            {
+                // A prior PreparePair timed out on our side after OpenDIBR had
+                // actually added this camera (its RTSP warmup can outlast the
+                // control timeout, especially for a remote camera), so our
+                // _openDibrAddedOrder cache never recorded it and this retry
+                // re-sent add_camera. OpenDIBR already has it — treat the
+                // duplicate-add rejection as success and reconcile the cache
+                // rather than letting the pair stay permanently wedged.
+                Debug.Log($"[OpenDibrSessionManager] '{identity}' already active on OpenDIBR — reconciling cache.");
+            }
             _openDibrAddedOrder.Add(identity);
         }
 

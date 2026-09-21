@@ -31,7 +31,7 @@ namespace Thesis.Stream
             if (_currentPub != null && _currentPub != pub)
             {
                 _currentPub.SetSubscribed(false);
-                StopStream();
+                StopStream(clearTexture: false); // keep last frame visible until new one arrives
             }
 
             _currentPub = pub;
@@ -50,7 +50,7 @@ namespace Thesis.Stream
                 _currentPub = null;
             }
 
-            StopStream();
+            StopStream(clearTexture: true);
         }
 
         private void OnTrackSubscribed(IRemoteTrack track, RemoteTrackPublication pub, RemoteParticipant participant)
@@ -74,7 +74,7 @@ namespace Thesis.Stream
             _display.texture = tex;
         }
 
-        private void StopStream()
+        private void StopStream(bool clearTexture = true)
         {
             if (_streamCoroutine != null)
             {
@@ -90,7 +90,7 @@ namespace Thesis.Stream
                 _videoStream = null;
             }
 
-            if (_display != null)
+            if (clearTexture && _display != null)
                 _display.texture = null;
         }
     }

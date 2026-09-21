@@ -106,7 +106,7 @@ function Step-DibrBridge {
         }
 
         Write-Host "[DibrBridge] freezing via PyInstaller..."
-        & "$venv\Scripts\python.exe" -m PyInstaller --onedir --name dibr-bridge --console --noconfirm entrypoint.py
+        & "$venv\Scripts\python.exe" -m PyInstaller dibr-bridge.spec --noconfirm
 
         $distDir = Join-Path $sourceRepo 'dist\dibr-bridge'
         if (-not (Test-Path $distDir)) {

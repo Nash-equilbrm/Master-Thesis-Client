@@ -50,7 +50,8 @@ namespace Thesis.Dibr
 
             string exeDir = Path.GetDirectoryName(DibrCapability.ExePath);
             string args = $"-j \"{startupJsonPath}\" -i \"{exeDir}\"";
-            return TryStart(ref _openDibrProcess, DibrCapability.ExePath, args);
+            Debug.Log($"[OpenDibrProcessLauncher] Launching OpenDIBR: {DibrCapability.ExePath} {args}");
+            return TryStart(ref _openDibrProcess, DibrCapability.ExePath, args, captureOutput: true, logTag: "OpenDIBR");
         }
 
         // bridgeExePath: the PyInstaller-frozen dibr-bridge.exe (bundled
@@ -59,7 +60,7 @@ namespace Thesis.Dibr
         // "ffmpeg" subprocess calls resolve without needing ffmpeg installed
         // system-wide — no bridge-side code change needed for this, it still
         // just calls "ffmpeg" and relies on PATH resolution.
-        public bool StartBridge(string bridgeExePath, string arguments = null, string ffmpegDir = null)
+        public bool StartBridge(string bridgeExePath, string arguments = null, string ffmpegDir = null, bool captureOutput = false)
         {
             if (IsBridgeRunning) return true;
             if (string.IsNullOrEmpty(bridgeExePath) || !File.Exists(bridgeExePath))
@@ -68,10 +69,11 @@ namespace Thesis.Dibr
                 return false;
             }
 
-            return TryStart(ref _bridgeProcess, bridgeExePath, arguments, ffmpegDir);
+            return TryStart(ref _bridgeProcess, bridgeExePath, arguments, ffmpegDir, captureOutput, logTag: "Bridge");
         }
 
-        private static bool TryStart(ref Process slot, string exePath, string arguments, string extraPathDir = null)
+        private static bool TryStart(ref Process slot, string exePath, string arguments,
+            string extraPathDir = null, bool captureOutput = false, string logTag = null)
         {
             try
             {
@@ -82,6 +84,8 @@ namespace Thesis.Dibr
                     WorkingDirectory = Path.GetDirectoryName(exePath),
                     UseShellExecute = false,
                     CreateNoWindow = true,
+                    RedirectStandardOutput = captureOutput,
+                    RedirectStandardError = captureOutput,
                 };
                 if (!string.IsNullOrEmpty(extraPathDir))
                 {
@@ -91,8 +95,24 @@ namespace Thesis.Dibr
                     psi.EnvironmentVariables["PATH"] = extraPathDir + Path.PathSeparator + psi.EnvironmentVariables["PATH"];
                 }
 
-                slot = Process.Start(psi);
-                return slot != null;
+                var p = new Process { StartInfo = psi };
+                if (captureOutput)
+                {
+                    string tag = logTag ?? Path.GetFileNameWithoutExtension(exePath);
+                    p.OutputDataReceived += (_, e) => { if (e.Data != null) Debug.Log($"[{tag} stdout] {e.Data}"); };
+                    p.ErrorDataReceived  += (_, e) => { if (e.Data != null) Debug.Log($"[{tag} stderr] {e.Data}"); };
+                }
+
+                if (!p.Start()) return false;
+
+                if (captureOutput)
+                {
+                    p.BeginOutputReadLine();
+                    p.BeginErrorReadLine();
+                }
+
+                slot = p;
+                return true;
             }
             catch (Exception e)
             {
