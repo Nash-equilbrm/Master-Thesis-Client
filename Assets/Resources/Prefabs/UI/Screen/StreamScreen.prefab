@@ -139,8 +139,29 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9fffa4aa73a4237428450ea1dc03882e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _showAnim:
+    enabled: 1
+    anims:
+    - rid: 7082755324239937645
+  _hideAnim:
+    enabled: 1
+    anims:
+    - rid: 7082755324239937646
   _streamPlayer: {fileID: 6613040500478094860}
   _cameraSwitcher: {fileID: 2584133992739102710}
+  references:
+    version: 2
+    RefIds:
+    - rid: 7082755324239937645
+      type: {class: FadeAnim, ns: Thesis.UI, asm: Assembly-CSharp}
+      data:
+        duration: 0.3
+        ease: 9
+    - rid: 7082755324239937646
+      type: {class: FadeAnim, ns: Thesis.UI, asm: Assembly-CSharp}
+      data:
+        duration: 0.3
+        ease: 9
 --- !u!114 &1145759975107026618
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -316,6 +337,7 @@ GameObject:
   - component: {fileID: 5708070901010831524}
   - component: {fileID: 2584133992739102710}
   - component: {fileID: 5765615180656618103}
+  - component: {fileID: 5035243467731774759}
   m_Layer: 0
   m_Name: CameraPanel
   m_TagString: Untagged
@@ -397,17 +419,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _streamPlayer: {fileID: 6613040500478094860}
   _buttonContainer: {fileID: 5754642060623468171}
-  _cameraIdentities:
-  - cam1
-  - cam2
-  - cam3
-  - cam4
-  - cam5
-  - cam6
-  - cam7
-  - cam8
-  - cam9
-  - cam10
+  _crossfadeDuration: 1.5
+  _dibrFadeInDuration: 0.3
+  _dibrPrepareWaitMax: 8
+  _dibrFrameWaitMax: 3
+  _dibrStartupDelay: 1.5
 --- !u!114 &5765615180656618103
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -428,6 +444,21 @@ MonoBehaviour:
   m_FlexibleWidth: 1
   m_FlexibleHeight: -1
   m_LayoutPriority: 1
+--- !u!114 &5035243467731774759
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4051391633102766844}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a88a407f4cefcaa4195e5378e2c2dd65, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _cameraSwitcher: {fileID: 0}
+  _frameTimeoutSeconds: 10
+  _calibrationTimeoutSeconds: 10
 --- !u!1 &4345962067941235369
 GameObject:
   m_ObjectHideFlags: 0

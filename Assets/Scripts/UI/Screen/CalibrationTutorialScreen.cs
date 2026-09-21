@@ -108,7 +108,17 @@ namespace Thesis.UI.Screens
             if (webcam == null || !webcam.isPlaying || !webcam.didUpdateThisFrame) return;
 
             EnsureScratchRT(webcam.width, webcam.height);
-            Graphics.Blit(webcam, _scratchRT);
+            // Must match the orientation actually published over LiveKit, not
+            // the raw WebCamTexture — client-sdk-unity's WebCameraSource.ReadBuffer
+            // unconditionally flips rows bottom-up->top-down before sending
+            // (GetPixels32 returns bottom-up; WebRTC expects top-down). Without
+            // this same flip here, ArUco solves intrinsics/extrinsics against a
+            // vertically-mirrored image relative to what the bridge/OpenDIBR
+            // actually receive, producing calibration that doesn't describe the
+            // live frames (confirmed via check_stereo_calib.py: ~280-330px
+            // median epipolar error against real captures, see
+            // Master-Thesis-Reports' stereo-depth-calibration investigation).
+            Graphics.Blit(webcam, _scratchRT, new Vector2(1f, -1f), new Vector2(0f, 1f));
 
             if (_step == Step.Intrinsics)
                 TickIntrinsics();

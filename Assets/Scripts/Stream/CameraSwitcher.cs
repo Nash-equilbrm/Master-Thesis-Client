@@ -25,6 +25,11 @@ namespace Thesis.Stream
         private readonly Dictionary<string, Button> _buttons = new();
         private string _activeCamera;
 
+        // Fired the moment a switch is requested, before any crossfade/DIBR
+        // logic runs — lets independent listeners (e.g. DibrDepthTestCapture)
+        // observe (fromIdentity, toIdentity) without coupling into RunSwitch.
+        public event System.Action<string, string> OnSwitchStarted;
+
         private RawImage _dibrImage;
         private Coroutine _activeSwitch;
 
@@ -119,6 +124,8 @@ namespace Thesis.Stream
             string fromIdentity = _activeCamera;
             _activeCamera = identity;
             HighlightActiveButton(identity);
+
+            if (fromIdentity != null) OnSwitchStarted?.Invoke(fromIdentity, identity);
 
             if (_activeSwitch != null) StopCoroutine(_activeSwitch);
             _activeSwitch = StartCoroutine(RunSwitch(fromIdentity, identity, pub));

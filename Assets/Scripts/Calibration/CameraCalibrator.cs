@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.Video;
 using OpenCVForUnity.CoreModule;
 using OpenCVForUnity.ArucoModule;
+using OpenCVForUnity.Calib3dModule;
 using OpenCVForUnity.ImgprocModule;
 using OpenCVForUnity.UnityUtils;
 using UnityRect = UnityEngine.Rect;
@@ -170,9 +171,16 @@ namespace Thesis.Calibration {
             var tvecs = new List<Mat>();
             var imageSize = new Size(_readbackTex.width, _readbackTex.height);
 
+            // K3 and tangential distortion are unconstrained by ChArUco's limited
+            // viewing-angle coverage and were coming out abnormally large
+            // (k2~1.4-1.6, k3~-2.7 to -4.2 — foldy rectification), fed by noise
+            // rather than real lens distortion. Fixing both to 0 keeps the
+            // model to what this board can actually observe (see
+            // Master-Thesis-Reports' stereo-depth-calibration investigation).
+            const int flags = Calib3d.CALIB_FIX_K3 | Calib3d.CALIB_ZERO_TANGENT_DIST;
             double rpe = Aruco.calibrateCameraCharuco(
                 _allCharucoCorners, _allCharucoIds, _board, imageSize,
-                cameraMatrix, distCoeffs, rvecs, tvecs);
+                cameraMatrix, distCoeffs, rvecs, tvecs, flags);
 
             Intrinsics = new IntrinsicsData {
                 fx = (float)cameraMatrix.get(0, 0)[0],
