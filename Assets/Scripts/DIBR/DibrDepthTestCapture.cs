@@ -37,6 +37,8 @@ namespace Thesis.Dibr
 
         private void OnEnable()
         {
+            // Desktop diagnostic only (writes next to the project, grabs full frames) — never on Android/iOS.
+            if (Application.isMobilePlatform) return;
             if (_cameraSwitcher != null) _cameraSwitcher.OnSwitchStarted += OnSwitchStarted;
         }
 
