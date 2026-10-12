@@ -45,6 +45,14 @@ namespace Thesis.Dibr
         [SerializeField] private string _bridgeArgPrefix;
         [SerializeField] private string _bridgeWorkingDirOverride;
 
+        // Optional bridge stereo-config sources (all empty = bridge defaults).
+        // _bridgeConfigUrl: https:// or http://localhost only. _bridgeConfigPath:
+        // local JSON (the bridge prefers it over the URL). _bridgeStereoOverrides:
+        // comma-separated KEY=VALUE, each passed as --stereo-override.
+        [SerializeField] private string _bridgeConfigUrl;
+        [SerializeField] private string _bridgeConfigPath;
+        [SerializeField] private string _bridgeStereoOverrides;
+
         // Must match dibr-bridge's --rtsp-base default (bridge/main.py).
         [SerializeField] private string _rtspBase = "rtsp://localhost:8554";
 
@@ -163,7 +171,7 @@ namespace Thesis.Dibr
             string ffmpegDir = System.IO.Path.Combine(Application.streamingAssetsPath, "FFmpeg");
             string bridgeArgs = $"--server-url \"{Thesis.AppConfig.ServerUrl}\" --rtsp-base \"{_rtspBase}\" " +
                                  $"--width {_outputWidth} --height {_outputHeight} --room-code \"{Thesis.AppConfig.RoomCode}\"";
-            bridgeArgs += BuildStereoBackendArgs();
+            bridgeArgs += BuildStereoBackendArgs() + BuildBridgeConfigArgs();
             if (!string.IsNullOrWhiteSpace(_bridgeArgPrefix))
                 bridgeArgs = _bridgeArgPrefix.Trim() + " " + bridgeArgs;
             Debug.Log($"[OpenDibrSessionManager] Starting bridge: {bridgePath} {bridgeArgs}");
@@ -309,10 +317,57 @@ namespace Thesis.Dibr
             return urls;
         }
 
+        private string BuildBridgeConfigArgs()
+        {
+            var sb = new System.Text.StringBuilder();
+
+            string url = _bridgeConfigUrl?.Trim();
+            if (!string.IsNullOrEmpty(url))
+            {
+                bool ok = Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+                          (uri.Scheme == Uri.UriSchemeHttps ||
+                           (uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback));
+                if (ok)
+                {
+                    sb.Append($" --config-url \"{url}\"");
+                    Debug.Log($"[OpenDibrSessionManager] Bridge config URL: {url}");
+                }
+                else
+                {
+                    Debug.LogWarning("[OpenDibrSessionManager] Ignoring _bridgeConfigUrl — only https:// or http://localhost is allowed.");
+                }
+            }
+
+            string path = _bridgeConfigPath?.Trim();
+            if (!string.IsNullOrEmpty(path))
+            {
+                sb.Append($" --config-path \"{path}\"");
+                Debug.Log($"[OpenDibrSessionManager] Bridge config path: {path}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(_bridgeStereoOverrides))
+            {
+                foreach (var item in _bridgeStereoOverrides.Split(','))
+                {
+                    string kv = item.Trim();
+                    if (kv.Length == 0) continue;
+                    if (kv.IndexOf('=') <= 0 || kv.IndexOf('"') >= 0)
+                    {
+                        Debug.LogWarning($"[OpenDibrSessionManager] Ignoring malformed stereo override '{kv}' (expected KEY=VALUE).");
+                        continue;
+                    }
+                    sb.Append($" --stereo-override \"{kv}\"");
+                    Debug.Log($"[OpenDibrSessionManager] Bridge stereo override: {kv}");
+                }
+            }
+            return sb.ToString();
+        }
+
         // FFS-ready without hardcoded paths: if a Fast-FoundationStereo
         // checkpoint is bundled under StreamingAssets/DibrBridge/weights/**,
-        // request the ffs backend with it; otherwise pass nothing and let the
-        // bridge pick (its --stereo-backend / DIBR_STEREO_BACKEND default).
+        // pass it via --ffs-checkpoint; the bridge's default backend ("auto")
+        // then selects ffs when torch/CUDA work, else falls back to sgbm. No
+        // explicit --stereo-backend is passed so config/env can still override.
         private static string BuildStereoBackendArgs()
         {
             string weightsDir = System.IO.Path.Combine(Application.streamingAssetsPath, "DibrBridge", "weights");
@@ -322,11 +377,11 @@ namespace Thesis.Dibr
                 if (pth.Length > 0)
                 {
                     Array.Sort(pth, StringComparer.Ordinal);
-                    Debug.Log($"[OpenDibrSessionManager] Stereo backend requested: ffs (checkpoint {pth[0]})");
-                    return $" --stereo-backend ffs --ffs-checkpoint \"{pth[0]}\"";
+                    Debug.Log($"[OpenDibrSessionManager] Passing FFS checkpoint to bridge (backend: auto): {pth[0]}");
+                    return $" --ffs-checkpoint \"{pth[0]}\"";
                 }
             }
-            Debug.Log("[OpenDibrSessionManager] Stereo backend requested: none (no bundled FFS checkpoint — bridge decides)");
+            Debug.Log("[OpenDibrSessionManager] No bundled FFS checkpoint — bridge decides (backend: auto)");
             return "";
         }
 
