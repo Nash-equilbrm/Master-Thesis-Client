@@ -37,6 +37,14 @@ namespace Thesis.Dibr
         [Header("Bridge (Phase A — path TBD until that component exists)")]
         [SerializeField] private string _bridgeExePathOverride;
 
+        // DEV ONLY — both empty = production behavior (frozen dibr-bridge.exe
+        // run from its own folder). To run from a venv instead, set
+        // _bridgeExePathOverride to <dibr-bridge>\.venv\Scripts\python.exe,
+        // _bridgeArgPrefix to "-m bridge.main", and _bridgeWorkingDirOverride
+        // to <dibr-bridge> (the repo root, so the `bridge` package resolves).
+        [SerializeField] private string _bridgeArgPrefix;
+        [SerializeField] private string _bridgeWorkingDirOverride;
+
         // Must match dibr-bridge's --rtsp-base default (bridge/main.py).
         [SerializeField] private string _rtspBase = "rtsp://localhost:8554";
 
@@ -155,8 +163,12 @@ namespace Thesis.Dibr
             string ffmpegDir = System.IO.Path.Combine(Application.streamingAssetsPath, "FFmpeg");
             string bridgeArgs = $"--server-url \"{Thesis.AppConfig.ServerUrl}\" --rtsp-base \"{_rtspBase}\" " +
                                  $"--width {_outputWidth} --height {_outputHeight} --room-code \"{Thesis.AppConfig.RoomCode}\"";
+            bridgeArgs += BuildStereoBackendArgs();
+            if (!string.IsNullOrWhiteSpace(_bridgeArgPrefix))
+                bridgeArgs = _bridgeArgPrefix.Trim() + " " + bridgeArgs;
             Debug.Log($"[OpenDibrSessionManager] Starting bridge: {bridgePath} {bridgeArgs}");
-            if (!_launcher.StartBridge(bridgePath, bridgeArgs, ffmpegDir, captureOutput: true))
+            if (!_launcher.StartBridge(bridgePath, bridgeArgs, ffmpegDir, captureOutput: true,
+                    workingDirectory: _bridgeWorkingDirOverride))
             {
                 Debug.LogWarning("[OpenDibrSessionManager] Bridge failed to start — synthetic view unavailable this session.");
                 return;
@@ -295,6 +307,27 @@ namespace Thesis.Dibr
             EvictIfFull(_bridgeAdded, identity);
             _bridgeAdded[identity] = urls;
             return urls;
+        }
+
+        // FFS-ready without hardcoded paths: if a Fast-FoundationStereo
+        // checkpoint is bundled under StreamingAssets/DibrBridge/weights/**,
+        // request the ffs backend with it; otherwise pass nothing and let the
+        // bridge pick (its --stereo-backend / DIBR_STEREO_BACKEND default).
+        private static string BuildStereoBackendArgs()
+        {
+            string weightsDir = System.IO.Path.Combine(Application.streamingAssetsPath, "DibrBridge", "weights");
+            if (System.IO.Directory.Exists(weightsDir))
+            {
+                var pth = System.IO.Directory.GetFiles(weightsDir, "*.pth", System.IO.SearchOption.AllDirectories);
+                if (pth.Length > 0)
+                {
+                    Array.Sort(pth, StringComparer.Ordinal);
+                    Debug.Log($"[OpenDibrSessionManager] Stereo backend requested: ffs (checkpoint {pth[0]})");
+                    return $" --stereo-backend ffs --ffs-checkpoint \"{pth[0]}\"";
+                }
+            }
+            Debug.Log("[OpenDibrSessionManager] Stereo backend requested: none (no bundled FFS checkpoint — bridge decides)");
+            return "";
         }
 
         private void WarnIfAspectMismatch(IntrinsicsData intrinsics, string label)

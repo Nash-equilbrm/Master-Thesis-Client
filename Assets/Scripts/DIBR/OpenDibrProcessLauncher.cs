@@ -60,7 +60,12 @@ namespace Thesis.Dibr
         // "ffmpeg" subprocess calls resolve without needing ffmpeg installed
         // system-wide — no bridge-side code change needed for this, it still
         // just calls "ffmpeg" and relies on PATH resolution.
-        public bool StartBridge(string bridgeExePath, string arguments = null, string ffmpegDir = null, bool captureOutput = false)
+        //
+        // workingDirectory: null/empty = the exe's own folder (frozen-exe
+        // default). Dev override for `python.exe -m bridge.main`, which must
+        // run from the dibr-bridge repo root to resolve the `bridge` package.
+        public bool StartBridge(string bridgeExePath, string arguments = null, string ffmpegDir = null,
+            bool captureOutput = false, string workingDirectory = null)
         {
             if (IsBridgeRunning) return true;
             if (string.IsNullOrEmpty(bridgeExePath) || !File.Exists(bridgeExePath))
@@ -69,11 +74,13 @@ namespace Thesis.Dibr
                 return false;
             }
 
-            return TryStart(ref _bridgeProcess, bridgeExePath, arguments, ffmpegDir, captureOutput, logTag: "Bridge");
+            return TryStart(ref _bridgeProcess, bridgeExePath, arguments, ffmpegDir, captureOutput, logTag: "Bridge",
+                            workingDirectory: workingDirectory);
         }
 
         private static bool TryStart(ref Process slot, string exePath, string arguments,
-            string extraPathDir = null, bool captureOutput = false, string logTag = null)
+            string extraPathDir = null, bool captureOutput = false, string logTag = null,
+            string workingDirectory = null)
         {
             try
             {
@@ -81,7 +88,7 @@ namespace Thesis.Dibr
                 {
                     FileName = exePath,
                     Arguments = arguments,
-                    WorkingDirectory = Path.GetDirectoryName(exePath),
+                    WorkingDirectory = string.IsNullOrEmpty(workingDirectory) ? Path.GetDirectoryName(exePath) : workingDirectory,
                     UseShellExecute = false,
                     CreateNoWindow = true,
                     RedirectStandardOutput = captureOutput,
