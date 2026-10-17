@@ -9,6 +9,13 @@
     this repo (same layout as CLAUDE.md's workspace root table), winget for
     FFmpeg/MediaMTX, and (for -DibrBridge) Python 3.11+ on PATH.
 
+    DibrBridge builds the Fast-FoundationStereo variant ONLY
+    (dibr-bridge-ffs.spec: torch + FFS source + 20-30-48 checkpoint and
+    cfg.yaml under DibrBridge\weights, plus FFS LICENSE.txt; multi-GB,
+    NVIDIA GPU viewers). Needs dibr-bridge\.venv with requirements-ffs.txt
+    installed and the Fast-FoundationStereo repo as a sibling; throws if any
+    of that is missing.
+
 .PARAMETER Only
     Restrict the run to one or more of: FFmpeg, MediaMTX, DibrBridge, OpenDIBR.
     Default: all four.
@@ -96,6 +103,30 @@ function Step-DibrBridge {
         return
     }
 
+    # The FFS build is the ONLY dibr-bridge.exe we ship (no SGBM-only exe):
+    # fail loudly if anything it needs is missing rather than building a
+    # variant that silently lacks the model.
+    $specName = 'dibr-bridge-ffs.spec'
+    $ffsRepo = Join-Path $WorkspaceRoot 'Fast-FoundationStereo'
+    $ffsWeights = Join-Path $ffsRepo 'weights\20-30-48'
+    foreach ($f in @('model_best_bp2_serialize.pth', 'cfg.yaml')) {
+        if (-not (Test-Path (Join-Path $ffsWeights $f))) {
+            throw "[DibrBridge] needs $ffsWeights\$f (Fast-FoundationStereo sibling repo + 20-30-48 checkpoint)."
+        }
+    }
+    if (-not (Test-Path (Join-Path $ffsRepo 'core'))) {
+        throw "[DibrBridge] Fast-FoundationStereo repo not found at $ffsRepo (clone it next to this repo)."
+    }
+    if (-not (Test-Path (Join-Path $ffsRepo 'LICENSE.txt'))) {
+        throw "[DibrBridge] needs $ffsRepo\LICENSE.txt (must ship with the weights)."
+    }
+    if (-not (Test-Path (Join-Path $sourceRepo $specName))) {
+        throw "[DibrBridge] $specName missing in $sourceRepo."
+    }
+    # Separate work/dist dirs from the repo's default dist\ and build\.
+    $pyiArgs = @('--workpath', 'build-ffs', '--distpath', 'dist-ffs')
+    $distDir = Join-Path $sourceRepo 'dist-ffs\dibr-bridge'
+
     Push-Location $sourceRepo
     try {
         $venv = Join-Path $sourceRepo '.venv'
@@ -105,16 +136,28 @@ function Step-DibrBridge {
             & "$venv\Scripts\pip.exe" install -r requirements.txt pyinstaller
         }
 
-        Write-Host "[DibrBridge] freezing via PyInstaller..."
-        & "$venv\Scripts\python.exe" -m PyInstaller dibr-bridge.spec --noconfirm
+        & "$venv\Scripts\python.exe" -c "import torch, timm, einops, omegaconf" 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            throw "[DibrBridge] torch/timm/einops/omegaconf missing in $venv (see dibr-bridge\requirements-ffs.txt)."
+        }
 
-        $distDir = Join-Path $sourceRepo 'dist\dibr-bridge'
+        Write-Host "[DibrBridge] freezing via PyInstaller ($specName)..."
+        & "$venv\Scripts\python.exe" -m PyInstaller $specName --noconfirm @pyiArgs
+        if ($LASTEXITCODE -ne 0) { throw "[DibrBridge] PyInstaller failed (exit $LASTEXITCODE)" }
+
         if (-not (Test-Path $distDir)) {
             throw "[DibrBridge] PyInstaller did not produce $distDir"
         }
         if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
         Copy-Item $distDir -Destination $dest -Recurse -Force
         Write-Host "[DibrBridge] copied to $dest"
+
+        $wDest = Join-Path $dest 'weights\20-30-48'
+        New-Item -ItemType Directory -Force -Path $wDest | Out-Null
+        Copy-Item (Join-Path $ffsWeights 'model_best_bp2_serialize.pth') -Destination $wDest -Force
+        Copy-Item (Join-Path $ffsWeights 'cfg.yaml') -Destination $wDest -Force
+        Copy-Item (Join-Path $ffsRepo 'LICENSE.txt') -Destination (Join-Path $dest 'FFS_LICENSE.txt') -Force
+        Write-Host "[DibrBridge] FFS checkpoint + license copied to $dest"
     } finally {
         Pop-Location
     }
